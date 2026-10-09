@@ -8,7 +8,7 @@ replayed with a newer decoder. One tab-separated line per entry:
 
 - `meta`: details about the ride (start, app version, stick, notes given at start)
 - `msg`: a received message as hex: 8-byte page, flag byte, channel ID, and
-  where the stick supports them RSSI and its own receive timestamp
+  where the stick supports them a signal block and its own receive timestamp
 - `event`: something the stick reported, e.g. a serial queue overflow
 - `note`: a note typed in during the ride, e.g. "Stages zeroed"
 
@@ -17,8 +17,6 @@ time lines the ride up with files from other devices, e.g. a head unit's FIT.
 """
 
 import gzip
-import itertools
-import statistics
 import threading
 import time
 import zlib
@@ -29,6 +27,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .receiver import Receiver
+from .reception import stick_time
 from .recording import Recorder
 from .sensors import Sensor
 
@@ -114,8 +113,8 @@ class Replay:
     meta: dict[str, str] = field(default_factory=dict)
     notes: list[tuple[float, str]] = field(default_factory=list)
     events: list[tuple[float, str]] = field(default_factory=list)
-    # Per device (kind, number): times of its messages
-    times: dict[tuple[str, int], list[float]] = field(
+    # Per channel (device type, number): seconds and stick timestamp of each message
+    channels: dict[tuple[int, int], list[tuple[float, int | None]]] = field(
         default_factory=lambda: defaultdict(list)
     )
 
@@ -155,9 +154,9 @@ def replay(
             receiver.handle(data, entry.seconds)
             if len(data) >= 13:
                 number = data[9] | data[10] << 8 | (data[12] & 0xF0) << 12
-                sensor = receiver.sensors.get((data[11] & 0x7F, number))
-                if sensor:
-                    result.times[sensor.kind, number].append(entry.seconds)
+                result.channels[data[11] & 0x7F, number].append(
+                    (entry.seconds, stick_time(data))
+                )
         elif entry.kind == "meta" and entry.fields[0] == "note":
             result.notes.append((entry.unix_time, entry.fields[1]))
         elif entry.kind == "meta":
@@ -170,15 +169,3 @@ def replay(
     result.recorder.close()
     result.meta.update(meta)
     return result
-
-
-def longest_gap(times: list[float]) -> float:
-    return max((b - a for a, b in itertools.pairwise(times)), default=0.0)
-
-
-def median_interval(times: list[float]) -> float:
-    return (
-        statistics.median(b - a for a, b in itertools.pairwise(times))
-        if len(times) > 1
-        else 0.0
-    )

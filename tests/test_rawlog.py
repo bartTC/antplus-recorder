@@ -73,11 +73,12 @@ def test_replay_gives_the_same_csv_as_the_live_ride(tmp_path):
     result = rawlog.replay(log.path)
     assert result.recorder.path.name == "ride_replay.csv"
     assert rows(result.recorder.path) == rows(recorder.path)
-    assert {key: len(times) for key, times in result.times.items()} == {
-        ("power", 57587): 20,
-        ("heart_rate", 190197): 20,
+    assert {key: len(messages) for key, messages in result.channels.items()} == {
+        (11, 57587): 20,
+        (120, 190197): 20,
     }
-    assert rawlog.longest_gap(result.times["power", 57587]) == pytest.approx(0.5)
+    # The stick timestamp is kept for the reception analysis
+    assert result.channels[11, 57587][1] == (0.6, 2 * 8192)
 
 
 def test_replay_reads_a_log_cut_off_by_a_crash(tmp_path):

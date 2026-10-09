@@ -21,9 +21,11 @@ OPEN_ATTEMPTS = 3
 RESPONSE_TIMEOUT = 0.5  # seconds; a working stick answers within about 30 ms
 
 
-# Lib config flags for the data after each page: channel ID, RSSI, receive
-# timestamp. Tried in this order; sticks without RSSI fall back to fewer.
-EXTENDED_DATA = {0xE0: "channel ID, RSSI, timestamp", 0xA0: "channel ID, timestamp"}
+# Lib config flags for the data after each page: channel ID, signal, receive
+# timestamp. Tried in this order; sticks without them fall back to fewer. The
+# signal is RSSI in dBm where the chip can measure it; nRF24AP2 sticks (ANT USB2,
+# USB-m) send an AGC block instead, which says nothing about reception.
+EXTENDED_DATA = {0xE0: "channel ID, signal, timestamp", 0xA0: "channel ID, timestamp"}
 DATA_EVENTS = {
     Message.Code.EVENT_RX_BROADCAST,
     Message.Code.EVENT_RX_ACKNOWLEDGED,

@@ -50,7 +50,7 @@ Recording starts right away, so it can't be forgotten. Files go to the folder yo
 | `--devices FILE` | `devices.toml` | The device list, see [Naming devices](#naming-devices). |
 | `--note TEXT` | | A note for the raw log, e.g. bike, spindown, zero offset, the head unit's power factor. Repeat for more. |
 | `--fit-from CSV` | | Build the FIT files for a recorded CSV, e.g. after a crash, then exit. |
-| `--replay LOG` | | Recompute CSV and FIT files from a raw log with the current version, then exit. See [Raw log and replay](#raw-log-and-replay). |
+| `--replay LOG` | | Recompute CSV and FIT files from a raw log with the current version and report reception, then exit. See [Raw log and replay](#raw-log-and-replay) and [Reception](#reception). |
 
 ### Keys
 
@@ -132,11 +132,33 @@ note   8.1091  1791567854.214  Kickr spindown done
 ```
 
 - `meta`: start time, app version, command line, stick, notes from `--note`.
-- `msg`: the 8-byte page, the flag byte and the channel ID (device number, type, transmission type). Where the stick supports it, also a signal strength block and the stick's own receive timestamp in 1/32768 s, the most exact clock there is. An ANT USB2 stick sends the signal strength as measurement type `0x10`, not the documented dBm format, so it is kept as raw bytes.
+- `msg`: the 8-byte page, the flag byte and the channel ID (device number, type, transmission type). Where the stick supports it, also a signal block and the stick's own receive timestamp in 1/32768 s, the most exact clock there is. The timestamp wraps every 2 s.
 - `event`: anything the stick reports besides data, such as a serial queue overflow, which explains a gap no sensor caused.
 - `note`: a note typed in with `n` during the ride.
 
-`--replay` runs the messages through the current decoder and writes `<ride>_replay.csv` and its FIT files next to the log. It also prints the notes and, per device, the number of messages, the usual interval and the longest gap. A long gap there means reception; values that are off without a gap point to the decoder.
+The signal block is not a signal strength on the usual sticks. ANT defines two layouts: measurement type `0x20` is RSSI in dBm (3 bytes: type, RSSI, threshold), type `0x10` is a reading of the radio's automatic gain control (4 bytes: type, threshold offset, 16-bit register). The ANT USB2 and USB-m sticks are built on the nRF24AP2, which can't measure RSSI and sends the AGC block, e.g. `10 01 6d 00`. By the reports below, its register stays the same at every distance until the messages stop, so it says nothing about reception. It stays in the log unchanged, and a stick with a newer chip that sends `0x20` gets real dBm values recorded. Sources: [antgo #24](https://github.com/half2me/antgo/pull/24), [Nordic DevZone](https://devzone.nordicsemi.com/f/nordic-q-a/4633/how-decode-rssi-message), [ANT parameters](https://www.thisisant.com/APIassets/0.5.0_ANTnRFConnectDoc/doc/api/parameters.html).
+
+`--replay` runs the messages through the current decoder and writes next to the log `<ride>_replay.csv`, its FIT files and `<ride>_replay_reception.csv`. It also prints the notes and the reception of every channel, see below.
+
+### Reception
+
+Instead of a signal strength, `--replay` measures what arrived. Every ANT+ profile sends at a fixed period (heart rate every 8070/32768 s, power 8182, FE-C 8192), so the interval between two messages of a channel tells how many were missed:
+
+```
+channel                  period   usual  messages   loss    breaks   loss per minute (█ = 65.1%)
+power #19696              250ms   250ms       271  24.7%         0   ▄▂
+trainer #19696            250ms   750ms       132  63.1%         0   █▇
+type_35 #998594          ~125ms   125ms       654   9.4%         0   ▂▁
+```
+
+- **Per channel, not per device:** a Kickr sends power and FE-C, a heart rate strap heart rate and a footpod profile, each with its own period and its own loss.
+- **period:** what the profile prescribes. For profiles the app doesn't know (marked `~`) it is estimated from the intervals.
+- **usual:** the median interval. Equal to the period with high loss means messages really get lost. A whole multiple of the period means the sensor sends less often than its profile says, or something hits the same slots every time: in the example, the Kickr's FE-C channel arrives every 750 ms instead of every 250 ms, its power channel at the period.
+- **breaks:** more than 2 s without a message count as a break, not as loss, e.g. a power meter asleep while the cranks stand still. Counting starts over after a break.
+- **Intervals:** the stick's timestamp gives the exact interval within its 2 s; the computer's clock only decides how many times it wrapped. Logs without stick timestamps use the computer's clock.
+- **loss per minute:** one character per minute, `·` no loss, blank no message. In scan mode, two sensors with almost the same period collide each time their send times drift past each other, which shows as loss in regular waves. Even loss, or loss on one sensor only, points to the radio or the sensor. `<ride>_replay_reception.csv` has the numbers per channel and minute.
+
+A gap in the reception explains a wrong value; a wrong value without a gap points to the decoder.
 
 ### Naming devices
 
@@ -159,7 +181,7 @@ Set `name` and the tile shows it right away, no restart needed. Names also go in
 - **Power between pages:** Torque-based meters send the page with the power value only every few messages. The app computes the average from the accumulated power and the event counter, so the power of every pedal stroke counts, not just the latest one.
 - **Coasting:** A meter keeps repeating its last value while the cranks stand still. If the event counter hasn't moved for 3 s, the app shows 0 W, like head units do.
 - **Recording:** If a second gets no new power value, the last one is held while the sensor is still sending, again like head units with 1 s recording.
-- **Every message:** The stick is asked to add its receive timestamp to each message. That also keeps openant from dropping a message that repeats the previous one byte for byte, so the raw log really has all of them.
+- **Every message:** The stick is asked to add a signal block and its receive timestamp to each message. That also keeps openant from dropping a message that repeats the previous one byte for byte, so the raw log really has all of them.
 
 ## Troubleshooting
 

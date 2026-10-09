@@ -10,7 +10,7 @@ from pathlib import Path
 
 from textual.logging import TextualHandler
 
-from . import rawlog
+from . import rawlog, reception
 from .app import RecorderApp
 from .rawlog import RawLog
 from .receiver import Receiver
@@ -61,7 +61,7 @@ def main() -> None:
         "--replay",
         type=Path,
         metavar="LOG",
-        help="recompute CSV and FIT files from a ride's raw log (.ant.gz), then exit",
+        help="recompute CSV and FIT files from a ride's raw log (.ant.gz) and report reception, then exit",
     )
     args = parser.parse_args()
 
@@ -129,17 +129,40 @@ def replay(log: Path, registry: Registry) -> None:
         print(
             f"note:    {datetime.fromtimestamp(unix_time).astimezone():%H:%M:%S}  {text}"
         )
-    print(f"\n{'device':<22}{'messages':>9}{'every':>9}{'longest gap':>13}")
-    for (kind, number), times in sorted(result.times.items()):
-        every, gap = rawlog.median_interval(times), rawlog.longest_gap(times)
-        print(
-            f"{kind + ' #' + str(number):<22}{len(times):>9}{every:>8.2f}s{gap:>12.1f}s"
-        )
+    channels = reception.analyse(result.channels)
+    print_reception(channels)
     for seconds, text in result.events:
         print(f"stick event at {seconds:.1f}s: {text}")
     print()
     print(f"Wrote {result.recorder.path}")
+    stem = result.recorder.path.name.removesuffix(".csv")
+    reception_path = result.recorder.path.with_name(f"{stem}_reception.csv")
+    started = datetime.fromisoformat(result.meta["started"])
+    reception.write_csv(reception_path, channels, started)
+    print(f"Wrote {reception_path}")
     write_fits(result.recorder.path)
+
+
+def print_reception(channels: list[reception.Channel]) -> None:
+    """Loss per channel, and per minute as a line of bars to spot collision waves."""
+    top = max((m.loss or 0 for c in channels for m in c.minutes.values()), default=0)
+    last = max((max(c.minutes) for c in channels if c.minutes), default=0)
+    print(
+        f"\n{'channel':<22}{'period':>9}{'usual':>8}{'messages':>10}{'loss':>7}{'breaks':>10}"
+        f"   loss per minute (█ = {top:.1f}%)"
+    )
+    for c in channels:
+        loss = "" if c.loss is None else f"{c.loss:.1f}%"
+        period = f"{'~' if c.estimated else ''}{c.period * 1000:.0f}ms"
+        usual = f"{c.usual * 1000:.0f}ms"
+        breaks = f"{c.breaks} ({c.break_seconds:.0f}s)" if c.breaks else "0"
+        minutes = [
+            c.minutes[i].loss if i in c.minutes else None for i in range(last + 1)
+        ]
+        print(
+            f"{c.kind + ' #' + str(c.number):<22}{period:>9}{usual:>8}{c.received:>10}{loss:>7}"
+            f"{breaks:>10}   {reception.sparkline(minutes, top)}"
+        )
 
 
 def write_fits(csv_path: Path) -> None:

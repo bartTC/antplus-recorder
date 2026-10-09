@@ -4,6 +4,14 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- `--replay` reports reception per channel: the profile's period, the usual interval, received messages, loss in percent, breaks and loss per minute, and writes `<ride>_replay_reception.csv` with loss per channel and minute. Loss is counted from the intervals between messages, exact to the stick's timestamp; pauses over 2 s count as breaks, not loss.
+
+### Fixed
+
+- The signal block in the raw log was described as a signal strength. On ANT USB2 and USB-m sticks (nRF24AP2) it is an AGC reading (measurement type `0x10`, 4 bytes), not RSSI in dBm, and says nothing about reception.
+
 ## [0.2.0] - 2026-10-09
 
 ### Added
