@@ -4,6 +4,8 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-09
+
 ### Added
 
 - `--replay` reports reception per channel: the profile's period, the usual interval, received messages, loss in percent, breaks and loss per minute, and writes `<ride>_replay_reception.csv` with loss per channel and minute. Loss is counted from the intervals between messages, exact to the stick's timestamp; pauses over 2 s count as breaks, not loss.
@@ -44,6 +46,7 @@ First release.
 - libusb comes bundled through `libusb-package`, so no Homebrew is needed on a Mac.
 - A stick that hangs after a crash is detected within half a second and reset.
 
-[Unreleased]: https://github.com/bartTC/antplus-recorder/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/bartTC/antplus-recorder/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/bartTC/antplus-recorder/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/bartTC/antplus-recorder/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/bartTC/antplus-recorder/releases/tag/v0.1.0
