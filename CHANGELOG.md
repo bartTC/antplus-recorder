@@ -1,0 +1,41 @@
+# Changelog
+
+All notable changes to this project. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+## [0.2.0] - 2026-10-09
+
+### Added
+
+- Raw log: every ride also writes `<ride>.ant.gz` with every ANT+ message exactly as the stick delivered it, with a monotonic and a unix timestamp per line, the app version, the command line and the stick's serial number, firmware and USB ID. Flushed every second, readable after a crash.
+- The stick is asked for signal strength and its own receive timestamp (1/32768 s) with each message. Sticks without them fall back to fewer extras.
+- Stick events other than data, such as a serial queue overflow, go into the raw log.
+- Notes: `--note TEXT` at the start and the `n` key during the ride write a note into the raw log, e.g. bike, spindown or zero offset.
+- `--replay LOG` recomputes CSV and FIT files from a raw log with the current version and prints the notes and, per device, the number of messages, the usual interval and the longest gap.
+
+### Changed
+
+- Messages that repeat the previous one byte for byte are no longer dropped, because the receive timestamp makes each one unique. Averages can differ slightly from 0.1.0.
+
+## [0.1.0] - 2026-10-09
+
+First release.
+
+### Added
+
+- Receives every ANT+ sensor in range without pairing, using the stick's continuous scan mode.
+- Terminal dashboard: a tile per power meter, smart trainer and heart rate strap with power, cadence, 3/10/30 s averages, L/R balance, battery, update rate and a trend line; other devices in a table.
+- Power averages over Live, 3, 10, 30 or 60 s with buttons or the keys 1–5. L/R balance follows the selected window, power-weighted.
+- Comparing power meters: click a tile to make it the reference; the others show the difference in watts and percent and a lap over the work since the last `c`.
+- Smart trainers (FE-C): state, resistance, incline, calibration warnings such as `spindown needed`, and ERG feedback.
+- Recording: a CSV row per sensor and second, and one FIT file per power source when quitting. Files are named after the start time and never overwritten. `--fit-from` builds the FIT files from a CSV after a crash.
+- `devices.toml` lists every device seen with manufacturer, model and serial; names set there show up right away. The reference meter is saved there too.
+- `--device` limits display and recording to given device numbers.
+- Power from the accumulated power and event counter, so every pedal stroke counts; 0 W after 3 s without a new event; the last value held for seconds without a new page.
+- libusb comes bundled through `libusb-package`, so no Homebrew is needed on a Mac.
+- A stick that hangs after a crash is detected within half a second and reset.
+
+[Unreleased]: https://github.com/bartTC/antplus-recorder/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/bartTC/antplus-recorder/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/bartTC/antplus-recorder/releases/tag/v0.1.0

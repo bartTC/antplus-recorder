@@ -2,6 +2,7 @@
 
 import time
 from collections import deque
+from typing import ClassVar
 
 from openant.base.driver import DriverNotFound
 from openant.easy.exception import AntException
@@ -10,10 +11,21 @@ from textual.binding import Binding
 from textual.containers import Grid, Horizontal, Vertical
 from textual.message import Message
 from textual.reactive import reactive
-from textual.widgets import Button, DataTable, Digits, Footer, Header, Label, Sparkline
+from textual.screen import ModalScreen
+from textual.widgets import (
+    Button,
+    DataTable,
+    Digits,
+    Footer,
+    Header,
+    Input,
+    Label,
+    Sparkline,
+)
 from usb.core import USBError
 
 from .comparison import MIN_REFERENCE_POWER, Lap, difference
+from .rawlog import RawLog
 from .receiver import Receiver
 from .recording import Recorder
 from .registry import Registry
@@ -37,6 +49,22 @@ AVERAGED_KINDS = ("power", "trainer")
 # Seconds compared in Live mode: two meters never measure at the same instant,
 # so single readings make the difference jump around
 LIVE_DELTA_WINDOW = 30
+
+
+class NoteScreen(ModalScreen[str | None]):
+    """Ask for a note to put into the raw log at this moment of the ride."""
+
+    BINDINGS: ClassVar = [("escape", "dismiss", "Cancel")]
+    DEFAULT_CSS = """
+    NoteScreen { align: center middle; }
+    NoteScreen Input { width: 70; border: round $accent; }
+    """
+
+    def compose(self) -> ComposeResult:
+        yield Input(placeholder="Note, e.g. Stages zeroed  (Enter saves, Esc cancels)")
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        self.dismiss(event.value.strip() or None)
 
 
 def signed(percent: float) -> str:
@@ -197,7 +225,11 @@ class SensorTile(Vertical):
 
 class RecorderApp(App):
     TITLE = "antplus-recorder"
-    BINDINGS = [("q", "quit", "Quit"), ("c", "reset_laps", "Reset Δ lap")] + [
+    BINDINGS = [
+        ("q", "quit", "Quit"),
+        ("c", "reset_laps", "Reset Δ lap"),
+        ("n", "note", "Note"),
+    ] + [
         Binding(str(key), f"window({seconds})", show=False)
         for key, seconds in enumerate(POWER_WINDOWS, start=1)
     ]
@@ -254,12 +286,17 @@ class RecorderApp(App):
     """
 
     def __init__(
-        self, receiver: Receiver, registry: Registry, recorder: Recorder | None
+        self,
+        receiver: Receiver,
+        registry: Registry,
+        recorder: Recorder | None,
+        raw_log: RawLog | None = None,
     ) -> None:
         super().__init__()
         self.receiver = receiver
         self.registry = registry
         self.recorder = recorder
+        self.raw_log = raw_log
         self.tiles: dict[tuple[int, int], SensorTile] = {}
         self.seen: set[tuple[int, int]] = set()
         # Per tile key: work against the reference since the last reset
@@ -366,6 +403,18 @@ class RecorderApp(App):
         else:
             self.registry.set_reference(sensor)
         self.refresh_display()
+
+    def action_note(self) -> None:
+        if self.raw_log is None:
+            self.notify("Not recording, there's no raw log for notes", timeout=3)
+            return
+
+        def save(text: str | None) -> None:
+            if text and self.raw_log:
+                self.raw_log.note(text, time.monotonic())
+                self.notify(f"Note saved: {text}", timeout=3)
+
+        self.push_screen(NoteScreen(), save)
 
     def action_reset_laps(self) -> None:
         self.laps.clear()

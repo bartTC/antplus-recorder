@@ -1,6 +1,6 @@
 [project]
 name = "antplus-recorder"
-version = "0.1.0"
+version = "0.2.0"
 description = "Record and display every ANT+ sensor in range: power meters, smart trainers and heart rate straps"
 readme = "README.md"
 license = "MIT"
@@ -37,6 +37,7 @@ antplus-recorder = "antplus_recorder:main"
 [project.urls]
 Homepage = "https://github.com/bartTC/antplus-recorder"
 Issues = "https://github.com/bartTC/antplus-recorder/issues"
+Changelog = "https://github.com/bartTC/antplus-recorder/blob/main/CHANGELOG.md"
 
 [dependency-groups]
 dev = [
@@ -52,7 +53,7 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.sdist]
-include = ["src", "README.md", "LICENSE"]
+include = ["src", "README.md", "CHANGELOG.md", "LICENSE"]
 
 [tool.ruff]
 target-version = "py311"  # keep in sync with requires-python

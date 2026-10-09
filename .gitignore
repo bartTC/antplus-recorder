@@ -12,6 +12,7 @@ wheels/
 # Recordings and the device list, written to the directory the app runs in
 *.csv
 *.fit
+*.ant.gz
 devices.toml
 
 # Build and tool caches

@@ -1,6 +1,6 @@
 # antplus-recorder
 
-Shows and records every ANT+ sensor in range: power meters, smart trainers and heart rate straps, side by side in the terminal. Built to compare power meters against each other, for example a smart trainer against crank or pedal power meters. One power meter is the reference, and every other one shows how far it is off, in watts and percent. Every ride is written to a CSV file and to one FIT file per power meter.
+Shows and records every ANT+ sensor in range: power meters, smart trainers and heart rate straps, side by side in the terminal. Built to compare power meters against each other, for example a smart trainer against crank or pedal power meters. One power meter is the reference, and every other one shows how far it is off, in watts and percent. Every ride is written to a CSV file, to one FIT file per power meter and to a raw log of every ANT+ message, from which any ride can be recomputed with a later version.
 
 There is no pairing. The ANT+ USB stick listens to the whole ANT+ frequency, and every sensor that sends shows up on its own.
 
@@ -35,7 +35,9 @@ antplus-recorder                       # show and record everything in range
 antplus-recorder --no-record           # only show
 antplus-recorder -o ~/Rides            # record somewhere else
 antplus-recorder -d 57587 -d 19696     # only these device numbers
+antplus-recorder --note "Kickr spindown done" --note "Stages zeroed"
 antplus-recorder --fit-from 2026-10-09_18-57-53.csv
+antplus-recorder --replay 2026-10-09_18-57-53.ant.gz
 ```
 
 Recording starts right away, so it can't be forgotten. Files go to the folder you start the command in, named after the start time, and are never overwritten.
@@ -46,7 +48,9 @@ Recording starts right away, so it can't be forgotten. Files go to the folder yo
 | `--no-record` | off | Only show, write no files. |
 | `-d`, `--device NUMBER` | all | Only show and record this ANT+ device number. Repeat for more. Useful when other people's sensors are in range. |
 | `--devices FILE` | `devices.toml` | The device list, see [Naming devices](#naming-devices). |
+| `--note TEXT` | | A note for the raw log, e.g. bike, spindown, zero offset, the head unit's power factor. Repeat for more. |
 | `--fit-from CSV` | | Build the FIT files for a recorded CSV, e.g. after a crash, then exit. |
+| `--replay LOG` | | Recompute CSV and FIT files from a raw log with the current version, then exit. See [Raw log and replay](#raw-log-and-replay). |
 
 ### Keys
 
@@ -55,6 +59,7 @@ Recording starts right away, so it can't be forgotten. Files go to the folder yo
 | `1`–`5` or the buttons | Big power numbers, L/R balance and the difference show Live, 3 s, 10 s, 30 s or 60 s averages. |
 | click a power tile | Make it the reference for comparing, click again to clear. |
 | `c` | Start a new lap for the comparison. |
+| `n` | Write a note into the raw log at this moment, e.g. "Stages zeroed". |
 | `q` | Quit. Writes the FIT files. |
 
 ### What a tile shows
@@ -112,6 +117,27 @@ A device that joins mid-ride (pedals woken up later) simply starts appearing in 
 
 When you quit, there is one FIT file per power source, e.g. `2026-10-09_18-57-53_power-57587_stages-cycling.fit`, with power, cadence, L/R balance and the heart rate of the first strap, plus speed and distance for a smart trainer. Each file is a complete cycling activity (indoor cycling) with lap and session summary, so it can be uploaded anywhere and compared with tools like the [DC Rainmaker Analyzer](https://analyzer.dcrainmaker.com), which expect one file per power meter. A FIT file is only valid when complete, so it is built from the CSV at the end. After a crash, `--fit-from` builds it.
 
+### Raw log and replay
+
+`2026-10-09_18-57-53.ant.gz` holds every ANT+ message exactly as the stick delivered it, nothing decoded. Whatever the app makes of the bytes belongs to the analysis, so an old log can be replayed with every newer version, e.g. after a decoding fix. About 1–3 MB per hour. It is flushed every second, so after a crash it is readable up to that point.
+
+One tab-separated line per entry: type, seconds since start (monotonic, for exact intervals), unix time (to line the ride up with other devices, e.g. a head unit's FIT file), then the fields:
+
+```
+meta   0.0000  1791567846.535  started  2026-10-09T19:44:06+02:00
+meta   0.0000  1791567846.535  note     Stages zeroed before start
+meta   1.1732  1791567847.717  stick    serial 304363608, AP2USB1.05, USB 0fcf:1008, extended data 0xe0 (channel ID, RSSI, timestamp)
+msg    1.3331  1791567847.868  10 9d ff 00 59 76 00 00 e0 f0 4c 0b 05 10 01 6d 00 5a 1a
+note   8.1091  1791567854.214  Kickr spindown done
+```
+
+- `meta`: start time, app version, command line, stick, notes from `--note`.
+- `msg`: the 8-byte page, the flag byte and the channel ID (device number, type, transmission type). Where the stick supports it, also a signal strength block and the stick's own receive timestamp in 1/32768 s, the most exact clock there is. An ANT USB2 stick sends the signal strength as measurement type `0x10`, not the documented dBm format, so it is kept as raw bytes.
+- `event`: anything the stick reports besides data, such as a serial queue overflow, which explains a gap no sensor caused.
+- `note`: a note typed in with `n` during the ride.
+
+`--replay` runs the messages through the current decoder and writes `<ride>_replay.csv` and its FIT files next to the log. It also prints the notes and, per device, the number of messages, the usual interval and the longest gap. A long gap there means reception; values that are off without a gap point to the decoder.
+
 ### Naming devices
 
 `devices.toml` in the current folder lists every device ever seen, filled in automatically:
@@ -133,6 +159,7 @@ Set `name` and the tile shows it right away, no restart needed. Names also go in
 - **Power between pages:** Torque-based meters send the page with the power value only every few messages. The app computes the average from the accumulated power and the event counter, so the power of every pedal stroke counts, not just the latest one.
 - **Coasting:** A meter keeps repeating its last value while the cranks stand still. If the event counter hasn't moved for 3 s, the app shows 0 W, like head units do.
 - **Recording:** If a second gets no new power value, the last one is held while the sensor is still sending, again like head units with 1 s recording.
+- **Every message:** The stick is asked to add its receive timestamp to each message. That also keeps openant from dropping a message that repeats the previous one byte for byte, so the raw log really has all of them.
 
 ## Troubleshooting
 

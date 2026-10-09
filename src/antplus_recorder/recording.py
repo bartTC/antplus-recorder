@@ -36,7 +36,8 @@ MESG_NUM = Profile["mesg_num"]
 class Recorder:
     """Appends one row per sensor and second to a new CSV file."""
 
-    def __init__(self, path: Path, now: float) -> None:
+    def __init__(self, path: Path, now: float, started: datetime | None = None) -> None:
+        """`started` is the wall clock time at `now`, the current time by default."""
         self.path = path
         self.rows = 0
         # "x" refuses to overwrite an existing file
@@ -47,7 +48,9 @@ class Recorder:
         # Rows are stamped from the monotonic clock so they're evenly spaced
         # even if a tick fires a bit early or late
         self._started = now
-        self._started_wall = datetime.now().astimezone().replace(microsecond=0)
+        self._started_wall = started or datetime.now().astimezone().replace(
+            microsecond=0
+        )
         self._last = now
 
     def elapsed(self, now: float) -> float:

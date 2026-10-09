@@ -31,3 +31,25 @@ def test_messages_without_channel_id_are_skipped():
     receiver = Receiver()
     receiver._on_data(list(power_page(1, 200, 200)))
     assert not receiver.sensors
+
+
+def test_rssi_and_stick_timestamp_dont_disturb_decoding():
+    receiver = Receiver()
+    receiver.handle(
+        extended(power_page(1, 200, 200), 57587, 11, stick_time=0x1A5A), 0.0
+    )
+    assert receiver.sensors[11, 57587].value == 200
+
+
+def test_log_gets_every_tracked_message_unchanged():
+    logged = []
+
+    class Log:
+        def message(self, data, now):
+            logged.append((list(data), now))
+
+    receiver = Receiver(only={57587}, log=Log())
+    data = extended(power_page(1, 200, 200), 57587, 11, stick_time=7)
+    receiver.handle(data, 1.5)
+    receiver.handle(extended(power_page(1, 200, 200), 19696, 11), 1.6)
+    assert logged == [(data, 1.5)]
