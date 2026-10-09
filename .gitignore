@@ -13,6 +13,7 @@ wheels/
 *.csv
 *.fit
 *.ant.gz
+*.ant
 devices.toml
 
 # Build and tool caches
