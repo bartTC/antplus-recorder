@@ -4,6 +4,8 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-10
+
 ### Added
 
 - A stick that is unplugged mid-ride ends the session with a message instead of stale tiles and a spinning core; the CSV, the raw log and the FIT files are written as on `q`.
@@ -57,7 +59,8 @@ First release.
 - libusb comes bundled through `libusb-package`, so no Homebrew is needed on a Mac.
 - A stick that hangs after a crash is detected within half a second and reset.
 
-[Unreleased]: https://github.com/bartTC/antplus-recorder/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/bartTC/antplus-recorder/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/bartTC/antplus-recorder/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/bartTC/antplus-recorder/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/bartTC/antplus-recorder/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/bartTC/antplus-recorder/releases/tag/v0.1.0
