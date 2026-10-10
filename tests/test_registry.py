@@ -68,3 +68,18 @@ def test_reference_is_set_and_cleared(tmp_path):
     assert (tmp_path / "devices.toml").read_text().count("reference") == 1
     registry.set_reference(None)
     assert registry.reference() is None
+
+
+def test_names_are_utf8_whatever_the_locale(tmp_path):
+    path = tmp_path / "devices.toml"
+    registry = Registry(path)
+    registry.record(stages())
+    path.write_text(
+        path.read_text(encoding="utf-8").replace('name = ""', 'name = "Büro-Kickr"'),
+        encoding="utf-8",
+    )
+    touch_later(path)
+    registry.reload()
+    assert registry.label(stages()) == "Büro-Kickr"
+    registry.set_reference(stages())
+    assert "Büro-Kickr" in path.read_bytes().decode("utf-8")

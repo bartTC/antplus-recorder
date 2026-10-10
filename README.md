@@ -186,7 +186,11 @@ Set `name` and the tile shows it right away, no restart needed. Names also go in
 ## Troubleshooting
 
 - **No ANT+ USB stick found:** Check that the system sees it (macOS: allow the accessory; Linux: udev rule above).
+- **No permission to use the ANT+ USB stick (Linux):** Add the udev rule above, reload the rules and plug the stick in again.
 - **Stick is used by another app:** Only one program can use the stick. Close Zwift, Garmin Express or another `antplus-recorder`.
+- **This stick can't do continuous scan mode:** The original ANT USB1 and other nRF24AP1 sticks only pair one channel at a time. Any ANT USB2, ANT USB-m or newer stick works.
+- **No libusb found:** `libusb-package` bundles libusb for macOS, x86_64 and arm64 Linux and Windows. Elsewhere (e.g. 32-bit Raspberry Pi OS) install it from the system, e.g. `apt install libusb-1.0-0`.
+- **The ANT+ USB stick was disconnected:** The session ends and the files are written as when quitting with `q`. Plug the stick in again and start a new session.
 - **Stick didn't answer, resetting it:** After a crash or kill the stick can hang once. The app resets it on its own, which takes about 3 s.
 - **No sensors found:** Sensors sleep until they move. Pedal a few turns, put on the heart rate strap.
 - **Two scrollbars at the right edge in iTerm2:** iTerm2 extends the last column into the window margin. Settings → Advanced → "Extend background color into margins in alternate screen mode?" → No ([textual#6230](https://github.com/Textualize/textual/issues/6230)).

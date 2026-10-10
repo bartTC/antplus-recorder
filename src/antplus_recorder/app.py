@@ -1,5 +1,7 @@
 """Terminal dashboard showing every ANT+ sensor in range."""
 
+import errno
+import sys
 import time
 from collections import deque
 from typing import ClassVar
@@ -22,11 +24,11 @@ from textual.widgets import (
     Label,
     Sparkline,
 )
-from usb.core import USBError
+from usb.core import NoBackendError, USBError
 
 from .comparison import MIN_REFERENCE_POWER, Lap, difference
 from .rawlog import RawLog
-from .receiver import Receiver
+from .receiver import Receiver, StickUnsupported
 from .recording import Recorder
 from .registry import Registry
 from .sensors import Sensor
@@ -65,6 +67,20 @@ class NoteScreen(ModalScreen[str | None]):
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         self.dismiss(event.value.strip() or None)
+
+
+def open_error(e: USBError) -> str:
+    """Why the stick couldn't be opened, as far as the USB error code tells."""
+    if e.errno == errno.EACCES and sys.platform.startswith("linux"):
+        # libusb lists the stick without permission to open it; macOS reports
+        # the same code when another app holds it
+        return (
+            "No permission to use the ANT+ USB stick. Add the udev rule from the "
+            "README, reload the rules and plug the stick in again."
+        )
+    if e.errno in (errno.EACCES, errno.EBUSY):
+        return f"Can't open the ANT+ USB stick, is another app using it? ({e})"
+    return f"Can't open the ANT+ USB stick ({e})."
 
 
 def signed(percent: float) -> str:
@@ -348,32 +364,37 @@ class RecorderApp(App):
 
     def _listen(self) -> None:
         """Open the stick and process its data until the app exits (worker thread)."""
+        self.receiver.on_lost = lambda: self.call_from_thread(
+            self._fail, "The ANT+ USB stick was disconnected. Recording stopped."
+        )
         try:
             if not self.receiver.open(
                 lambda text: self.call_from_thread(self._set_status, text)
             ):
                 return
         except DriverNotFound:
-            self.call_from_thread(
-                self._fail,
+            error = (
                 "No ANT+ USB stick found. Plug one in (on a Mac, allow the accessory "
-                "to connect) and try again.",
+                "to connect) and try again."
             )
-            return
+        except NoBackendError:
+            error = (
+                "No libusb found, so the ANT+ USB stick can't be reached. Install "
+                "libusb-1.0 (e.g. apt install libusb-1.0-0) and try again."
+            )
         except USBError as e:
-            self.call_from_thread(
-                self._fail,
-                f"Can't open the ANT+ USB stick, is another app using it? ({e})",
-            )
-            return
+            error = open_error(e)
+        except StickUnsupported as e:
+            error = str(e)
         except AntException:
-            self.call_from_thread(
-                self._fail,
-                "The ANT+ USB stick isn't responding. Unplug it, plug it back in and try again.",
-            )
+            error = "The ANT+ USB stick isn't responding. Unplug it, plug it back in and try again."
+        except Exception as e:  # noqa: BLE001 - openant raises a bare Exception when the stick refuses a command
+            error = f"The ANT+ USB stick refused to start scan mode ({e})."
+        else:
+            self.call_from_thread(self._start_listening)
+            self.receiver.run()
             return
-        self.call_from_thread(self._start_listening)
-        self.receiver.run()
+        self.call_from_thread(self._fail, error)
 
     def _set_status(self, text: str) -> None:
         self.status = text

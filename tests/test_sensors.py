@@ -1,3 +1,6 @@
+import threading
+import time
+
 import pytest
 
 from antplus_recorder.sensors import COAST_TIMEOUT, Sensor
@@ -101,3 +104,31 @@ def test_value_since_holds_last_value_while_fresh():
     sensor.update(power_page(1, 240, 240), 0.5)
     assert sensor.value_since(1.0, 2.0) == 240  # no new page in that second
     assert sensor.value_since(10.0, 11.0) is None  # gone quiet
+
+
+def test_averages_survive_pages_arriving_on_another_thread():
+    # The stick's thread appends samples while the dashboard averages them;
+    # iterating a deque under a concurrent append raises RuntimeError
+    sensor = Sensor(11, 1)
+    for event in range(1000):
+        sensor.update(power_page(event, event * 200, 200, right=50), event / 4)
+    stop = threading.Event()
+
+    def pedal():
+        event = 1000
+        while not stop.is_set():
+            sensor.update(power_page(event, event * 200, 200, right=50), event / 4)
+            event += 1
+
+    thread = threading.Thread(target=pedal)
+    thread.start()
+    try:
+        end = time.monotonic() + 0.3
+        while time.monotonic() < end:
+            now = 1e9
+            sensor.average(1e9, now)
+            sensor.right_balance_average(1e9, now)
+            sensor.rate(now, 1e9)
+    finally:
+        stop.set()
+        thread.join()

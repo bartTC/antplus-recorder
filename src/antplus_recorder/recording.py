@@ -41,7 +41,7 @@ class Recorder:
         self.path = path
         self.rows = 0
         # "x" refuses to overwrite an existing file
-        self._file = path.open("x", newline="")
+        self._file = path.open("x", newline="", encoding="utf-8")
         self._writer = csv.DictWriter(self._file, CSV_FIELDS)
         self._writer.writeheader()
         self._file.flush()
@@ -95,7 +95,7 @@ def write_fit_files(csv_path: Path) -> tuple[list[Path], list[Path]]:
     """
     heart_rate: dict[datetime, int] = {}
     devices: dict[tuple[str, int], list[dict]] = defaultdict(list)
-    with csv_path.open(newline="") as f:
+    with csv_path.open(newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
             time = datetime.fromisoformat(row["time"])
             if row["kind"] == "heart_rate":

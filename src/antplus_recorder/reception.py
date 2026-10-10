@@ -151,7 +151,7 @@ def analyse(
 def write_csv(path: Path, channels: Iterable[Channel], started: datetime) -> None:
     """One row per channel and minute, for finding patterns such as collision waves."""
     # "x" refuses to overwrite an existing file
-    with path.open("x", newline="") as file:
+    with path.open("x", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
         writer.writerow(["minute", "kind", "number", "received", "missed", "loss"])
         for channel in channels:

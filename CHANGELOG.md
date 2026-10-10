@@ -4,6 +4,17 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- A stick that is unplugged mid-ride ends the session with a message instead of stale tiles and a spinning core; the CSV, the raw log and the FIT files are written as on `q`.
+- Clear messages for a stick that can't do continuous scan mode (ANT USB1 and other nRF24AP1 sticks), for missing libusb on platforms without a bundled copy (e.g. 32-bit Raspberry Pi OS), for missing permissions on Linux (pointing to the udev rule) and for a stick that refuses a command. The last two used to end in a traceback.
+
+### Fixed
+
+- The dashboard could crash with "deque mutated during iteration" when a sensor's page arrived while its average was being computed.
+- Quitting after the stick was unplugged, and on Linux possibly every quit, raised a USB error while giving the stick back to the system.
+- CSV, reception CSV and `devices.toml` are always UTF-8, so a device name with non-ASCII characters no longer depends on the system locale (Windows: cp1252).
+
 ## [0.3.0] - 2026-10-09
 
 ### Added

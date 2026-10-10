@@ -80,3 +80,14 @@ def test_fit_files_never_overwrite(tmp_path):
     written, skipped = write_fit_files(recorder.path)
     assert not written
     assert len(skipped) == 2
+
+
+def test_csv_is_utf8_whatever_the_locale(tmp_path):
+    sensor = Sensor(11, 1)
+    sensor.update(power_page(1, 200, 200), 0.5)
+    recorder = Recorder(tmp_path / "ride.csv", 0.0)
+    recorder.write([(sensor, "Büro-Kickr")], 1.0)
+    recorder.close()
+    assert "Büro-Kickr" in recorder.path.read_bytes().decode("utf-8")
+    written, _ = write_fit_files(recorder.path)
+    assert written[0].name == "ride_power-1_b-ro-kickr.fit"

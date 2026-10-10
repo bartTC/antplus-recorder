@@ -34,7 +34,7 @@ class Registry:
             return
         self._mtime = mtime
         try:
-            self._doc = tomlkit.parse(self.path.read_text())
+            self._doc = tomlkit.parse(self.path.read_text(encoding="utf-8"))
             self._valid = True
         except ParseError:
             # Probably saved halfway through an edit: keep the last good names
@@ -110,5 +110,5 @@ class Registry:
             self._write()
 
     def _write(self) -> None:
-        self.path.write_text(tomlkit.dumps(self._doc))
+        self.path.write_text(tomlkit.dumps(self._doc), encoding="utf-8")
         self._mtime = self.path.stat().st_mtime_ns

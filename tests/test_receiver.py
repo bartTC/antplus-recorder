@@ -1,4 +1,10 @@
-from antplus_recorder.receiver import Receiver
+import errno
+
+import pytest
+from openant.base.driver import AdvancedOptionsTwo
+from usb.core import USBError
+
+from antplus_recorder.receiver import Receiver, StickUnsupported
 from tests.pages import extended, heart_rate_page, power_page
 
 
@@ -53,3 +59,84 @@ def test_log_gets_every_tracked_message_unchanged():
     receiver.handle(data, 1.5)
     receiver.handle(extended(power_page(1, 200, 200), 19696, 11), 1.6)
     assert logged == [(data, 1.5)]
+
+
+class FakeDriver:
+    def __init__(self, error=None):
+        self.error = error
+        self.reads = 0
+
+    def read(self):
+        self.reads += 1
+        if self.error:
+            raise self.error
+        return []
+
+
+class FakeAnt:
+    def __init__(self, driver):
+        self._driver = driver
+        self.written = []
+
+    def write_message(self, message):
+        self.written.append(message)
+
+
+class FakeNode:
+    def __init__(self, driver=None, stop_error=None, options=frozenset()):
+        self.ant = FakeAnt(driver or FakeDriver())
+        self.stop_error = stop_error
+        self.stopped = 0
+        self.advanced_options_two = set(options)
+
+    def stop(self):
+        self.stopped += 1
+        if self.stop_error:
+            raise self.stop_error
+
+
+def no_such_device():
+    return USBError("No such device", 19, errno.ENODEV)
+
+
+def test_stop_survives_a_stick_that_is_already_gone():
+    receiver = Receiver()
+    receiver.node = FakeNode(stop_error=no_such_device())
+    receiver.stop()  # on Linux closing also raises with the stick still there
+    assert receiver.node.stopped == 1
+
+
+def test_losing_the_stick_is_reported_once():
+    receiver = Receiver()
+    receiver.node = FakeNode(FakeDriver(no_such_device()))
+    lost = []
+    receiver.on_lost = lambda: lost.append(True)
+    receiver._watch_for_loss()
+    for _ in range(3):  # openant retries the read at once
+        with pytest.raises(USBError):
+            receiver.node.ant._driver.read()
+    assert lost == [True]
+
+
+def test_other_usb_errors_are_not_a_lost_stick():
+    receiver = Receiver()
+    receiver.node = FakeNode(FakeDriver(USBError("Pipe error", 9, errno.EPIPE)))
+    receiver.on_lost = lambda: pytest.fail("reported as lost")
+    receiver._watch_for_loss()
+    with pytest.raises(USBError):
+        receiver.node.ant._driver.read()
+
+
+def test_stick_without_scan_mode_is_refused():
+    receiver = Receiver()
+    receiver.node = FakeNode(options={AdvancedOptionsTwo.ExtMessageEnabled})
+    with pytest.raises(StickUnsupported):
+        receiver._check_scan_mode()
+
+
+def test_stick_with_scan_mode_or_unknown_capabilities_passes():
+    receiver = Receiver()
+    receiver.node = FakeNode(options={AdvancedOptionsTwo.ScanModeEnabled})
+    receiver._check_scan_mode()
+    receiver.node = FakeNode()  # capabilities never arrived
+    receiver._check_scan_mode()

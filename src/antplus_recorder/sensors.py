@@ -90,8 +90,12 @@ class Sensor:
     def is_fresh(self, now: float) -> bool:
         return now - self.last_seen < STALE_AFTER
 
+    # The stick's thread appends to the sample deques while the dashboard reads
+    # them, and iterating a deque that another thread appends to raises. list()
+    # copies it in one step under the GIL, so every reader snapshots first.
+
     def mean(self, since: float, until: float) -> float | None:
-        values = [v for t, v in self.samples if since < t <= until]
+        values = [v for t, v in list(self.samples) if since < t <= until]
         return sum(values) / len(values) if values else None
 
     def value_since(self, since: float, now: float) -> float | None:
@@ -112,7 +116,7 @@ class Sensor:
         """Right leg's share over the last `seconds`, weighted by power like head units do."""
         recent = [
             (right, power)
-            for t, right, power in self.balance_samples
+            for t, right, power in list(self.balance_samples)
             if now - t <= seconds
         ]
         total = sum(power for _, power in recent)
@@ -122,7 +126,7 @@ class Sensor:
 
     def rate(self, now: float, seconds: float = 4.0) -> float:
         """Value updates per second, a rough signal quality indicator."""
-        return sum(1 for t, _ in self.samples if now - t <= seconds) / seconds
+        return sum(1 for t, _ in list(self.samples) if now - t <= seconds) / seconds
 
     def update(self, page: bytes, now: float) -> None:
         """Decode one 8-byte ANT+ data page."""

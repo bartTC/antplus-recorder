@@ -1,12 +1,14 @@
 """Listen to every ANT+ sensor in range, without pairing."""
 
 import contextlib
+import errno
 import time
 from collections.abc import Callable, Sequence
 from typing import Protocol
 
 import libusb_package
 import usb.backend.libusb1
+from openant.base.driver import AdvancedOptionsTwo
 from openant.base.message import Message
 from openant.devices import ANTPLUS_NETWORK_KEY
 from openant.easy.channel import Channel
@@ -36,6 +38,10 @@ DATA_EVENTS = {
 
 class StickNotResponding(AntException):
     pass
+
+
+class StickUnsupported(AntException):
+    """The stick works but can't do what the app needs; the message says what."""
 
 
 class Log(Protocol):
@@ -73,18 +79,23 @@ class Receiver:
         """
         self.only = only
         self.log = log
+        # Called once from the stick's thread if the stick disappears mid-ride
+        self.on_lost: Callable[[], None] | None = None
         # Lib config flags in use, see EXTENDED_DATA
         self.extended_data = 0x80
         self.sensors: dict[tuple[int, int], Sensor] = {}
         self.node: Node | None = None
         self._stopping = False
+        self._lost = False
 
     def open(self, status: Callable[[str], None] = lambda _: None) -> bool:
         """Open the stick and start scanning, reporting progress to `status`.
 
         Returns False if stop() was called meanwhile. Raises openant's
-        DriverNotFound without a stick, USBError if another process has it, and
-        StickNotResponding if it never answers.
+        DriverNotFound without a stick, pyusb's NoBackendError without libusb,
+        USBError if the stick can't be opened (see open_error), StickNotResponding
+        if it never answers, StickUnsupported if it can't scan, and openant's
+        plain Exception if it refuses a command.
         """
         load_libusb()
         for attempt in range(OPEN_ATTEMPTS):
@@ -97,22 +108,24 @@ class Receiver:
             self.node = Node()
             if self._stopping:
                 # stop() ran while Node() was starting up
-                self.node.stop()
+                self._close_node()
                 return False
             if self._responds():
                 break
             # A stick left scanning by a session that didn't reset it (killed,
             # crashed) ignores the first open, but works on the next one
-            self.node.stop()
+            self._close_node()
         else:
             raise StickNotResponding
 
-        status("Starting scan mode...")
         try:
+            self._check_scan_mode()
+            self._watch_for_loss()
+            status("Starting scan mode...")
             self._open_scan_channel()
         except Exception:
             # The node runs a non-daemon thread that would keep the process alive
-            self.node.stop()
+            self._close_node()
             raise
         if self.log:
             self.log.meta("stick", self.stick_info, time.monotonic())
@@ -136,6 +149,41 @@ class Receiver:
                 return False
             time.sleep(0.02)
         return True
+
+    def _check_scan_mode(self) -> None:
+        """Continuous scan mode came with the nRF24AP2; an ANT USB1 can't do it.
+
+        The capabilities arrive before the serial number, so they're known by
+        now; a stick that didn't send any gets the benefit of the doubt.
+        """
+        options = self.node.advanced_options_two
+        if options and AdvancedOptionsTwo.ScanModeEnabled not in options:
+            msg = (
+                "This ANT+ USB stick can't do continuous scan mode. It needs an "
+                "ANT USB2, ANT USB-m or another stick with an nRF24AP2 or newer chip."
+            )
+            raise StickUnsupported(msg)
+
+    def _watch_for_loss(self) -> None:
+        """Report the stick disappearing (unplugged, hub lost power) once.
+
+        openant's reader logs the error and tries again at once, forever, so
+        without this the tiles would only go stale while a core spins.
+        """
+        driver = self.node.ant._driver  # noqa: SLF001
+        read = driver.read
+
+        def watched_read() -> Sequence[int]:
+            try:
+                return read()
+            except USBError as e:
+                if e.errno == errno.ENODEV and not (self._stopping or self._lost):
+                    self._lost = True
+                    if self.on_lost:
+                        self.on_lost()
+                raise
+
+        driver.read = watched_read
 
     def _open_scan_channel(self) -> None:
         self.node.set_network_key(0x00, ANTPLUS_NETWORK_KEY)
@@ -185,7 +233,14 @@ class Receiver:
         # scanning ignores the next session's first open.
         with contextlib.suppress(USBError):
             self.node.ant.write_message(Message(Message.ID.RESET_SYSTEM, [0x00]))
-        self.node.stop()
+        self._close_node()
+
+    def _close_node(self) -> None:
+        # Closing raises after the stick is gone, and on Linux also when there
+        # was no kernel driver to give the stick back to; the node's threads
+        # have been told to stop either way
+        with contextlib.suppress(USBError):
+            self.node.stop()
 
     def _on_data(self, data: Sequence[int]) -> None:
         self.handle(data, time.monotonic())
