@@ -58,7 +58,8 @@ Recording starts right away, so it can't be forgotten. On macOS the Mac stays aw
 |---|---|
 | `1`–`5` or the buttons | Big power numbers, L/R balance and the difference show Live, 3 s, 10 s, 30 s or 60 s averages. |
 | click a power tile | Make it the reference for comparing, click again to clear. |
-| `c` | Start a new lap for the comparison. |
+| `space` | Start a new lap. The CSV marks it in the `lap` column, and the difference to the reference starts over. |
+| `c` | Start a new lap for the comparison only, the CSV keeps its lap number. |
 | `n` | Write a note into the raw log at this moment, e.g. "Stages zeroed". |
 | `q` | Quit. Writes the FIT files. |
 
@@ -84,7 +85,7 @@ lap  -6.8%  (4:12)
 ```
 
 - The middle line compares the averages over the selected window. In Live mode it uses 30 s, because two meters never measure at the same instant and single readings make the difference jump.
-- **lap** compares the work of both meters since the last `c`. Seconds in which the reference is below 20 W (coasting) or one of the meters sends nothing don't count, and the time in brackets is only the counted seconds. Because it sums energy, a minute at 300 W weighs three times as much as a minute at 100 W. Press `c` at the start of every power level.
+- **lap** compares the work of both meters since the last `space` or `c`. Seconds in which the reference is below 20 W (coasting) or one of the meters sends nothing don't count, and the time in brackets is only the counted seconds. Because it sums energy, a minute at 300 W weighs three times as much as a minute at 100 W. Press `space` at the start of every power level; it also marks the lap in the CSV.
 - Changing the reference starts a new lap. The reference is saved in `devices.toml`.
 
 Use the lap, not the 30 s value, for corrections: over a few seconds, the reference's own noise shows up as a difference.
@@ -110,6 +111,7 @@ For a clean number, warm up for 10 minutes, then do the trainer's spindown and t
 | `cadence` | rpm. |
 | `right_balance` | Right leg's share in %, dual-sided meters only. |
 | `speed` | km/h, smart trainers only. |
+| `lap` | Lap number, from 1. `space` starts the next one, so the first row with a new number is the one after the key press. |
 
 A device that joins mid-ride (pedals woken up later) simply starts appearing in the rows. With pandas: `df.pivot_table(index="time", columns=["kind", "number"], values="value")`.
 
@@ -135,6 +137,7 @@ note   8.1091  1791567854.214  Kickr spindown done
 - `msg`: the 8-byte page, the flag byte and the channel ID (device number, type, transmission type). Where the stick supports it, also a signal block and the stick's own receive timestamp in 1/32768 s, the most exact clock there is. The timestamp wraps every 2 s.
 - `event`: anything the stick reports besides data, such as a serial queue overflow, which explains a gap no sensor caused.
 - `note`: a note typed in with `n` during the ride.
+- `lap`: `space` was pressed, with the number of the lap that starts. A replay puts it on the same row of the CSV.
 
 The signal block is not a signal strength on the usual sticks. ANT defines two layouts: measurement type `0x20` is RSSI in dBm (3 bytes: type, RSSI, threshold), type `0x10` is a reading of the radio's automatic gain control (4 bytes: type, threshold offset, 16-bit register). The ANT USB2 and USB-m sticks are built on the nRF24AP2, which can't measure RSSI and sends the AGC block, e.g. `10 01 6d 00`. By the reports below, its register stays the same at every distance until the messages stop, so it says nothing about reception. It stays in the log unchanged, and a stick with a newer chip that sends `0x20` gets real dBm values recorded. Sources: [antgo #24](https://github.com/half2me/antgo/pull/24), [Nordic DevZone](https://devzone.nordicsemi.com/f/nordic-q-a/4633/how-decode-rssi-message), [ANT parameters](https://www.thisisant.com/APIassets/0.5.0_ANTnRFConnectDoc/doc/api/parameters.html).
 

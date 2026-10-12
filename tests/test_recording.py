@@ -91,3 +91,16 @@ def test_csv_is_utf8_whatever_the_locale(tmp_path):
     assert "Büro-Kickr" in recorder.path.read_bytes().decode("utf-8")
     written, _ = write_fit_files(recorder.path)
     assert written[0].name == "ride_power-1_b-ro-kickr.fit"
+
+
+def test_csv_numbers_the_laps_from_the_row_after_the_key_press(tmp_path):
+    sensor = Sensor(11, 1)
+    recorder = Recorder(tmp_path / "ride.csv", 0.0)
+    for second in range(1, 7):
+        sensor.update(power_page(second, second * 200, 200), second - 0.5)
+        if second == 4:
+            assert recorder.new_lap() == 2
+        recorder.write([(sensor, None)], float(second))
+    recorder.close()
+    laps = [row["lap"] for row in csv.DictReader(recorder.path.open())]
+    assert laps == ["1", "1", "1", "2", "2", "2"]

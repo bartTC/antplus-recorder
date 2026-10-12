@@ -276,6 +276,7 @@ class RecorderApp(App):
     TITLE = "antplus-recorder"
     BINDINGS = [
         ("q", "quit", "Quit"),
+        ("space", "lap", "Lap"),
         ("c", "reset_laps", "Reset Δ lap"),
         ("n", "note", "Note"),
     ] + [
@@ -479,6 +480,22 @@ class RecorderApp(App):
                 self.toast(f"Note saved: {text}", 3)
 
         self.push_screen(NoteScreen(), save)
+
+    def action_lap(self) -> None:
+        """Start a new lap: the next CSV rows carry the next lap number.
+
+        The lap difference against the reference starts over too, since a lap
+        is usually a new power level. Without recording there is no lap number
+        to count, so only the difference is reset.
+        """
+        self.laps.clear()
+        if self.recorder is None:
+            self.toast("Δ lap reset", 2)
+            return
+        number = self.recorder.new_lap()
+        if self.raw_log:
+            self.raw_log.lap(number, time.monotonic())
+        self.toast(f"Lap {number}", 2)
 
     def action_reset_laps(self) -> None:
         """Start the lap difference against the reference over, e.g. after a zero offset."""

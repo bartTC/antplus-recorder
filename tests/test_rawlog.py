@@ -103,3 +103,26 @@ def test_other_files_are_refused(tmp_path):
         file.write("time,value\n")
     with pytest.raises(ValueError, match="not an antplus-recorder raw log"):
         list(rawlog.read(path))
+
+
+def test_replay_puts_laps_on_the_same_rows_as_the_live_ride(tmp_path):
+    log = RawLog(tmp_path / f"ride{rawlog.SUFFIX}", 0.0, STARTED)
+    receiver = Receiver(log=log)
+    recorder = Recorder(tmp_path / "ride.csv", 0.0, STARTED)
+    second = 1.0
+    for now, data in messages():
+        while now > second:
+            recorder.write([(s, None) for s in receiver.sensors.values()], second)
+            second += 1
+            if second == 5.0:  # key pressed between two ticks
+                log.lap(recorder.new_lap(), second - 0.5)
+        receiver.handle(data, now)
+    recorder.write([(s, None) for s in receiver.sensors.values()], second)
+    recorder.close()
+    log.close()
+
+    result = rawlog.replay(log.path)
+    live = [row["lap"] for row in csv.DictReader(recorder.path.open())]
+    assert live[0] == "1"
+    assert "2" in live
+    assert [row["lap"] for row in csv.DictReader(result.recorder.path.open())] == live

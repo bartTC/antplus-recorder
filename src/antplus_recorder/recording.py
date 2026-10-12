@@ -28,6 +28,7 @@ CSV_FIELDS = [
     "cadence",
     "right_balance",
     "speed",
+    "lap",
 ]
 
 MESG_NUM = Profile["mesg_num"]
@@ -40,6 +41,7 @@ class Recorder:
         """`started` is the wall clock time at `now`, the current time by default."""
         self.path = path
         self.rows = 0
+        self.lap = 1
         # "x" refuses to overwrite an existing file
         self._file = path.open("x", newline="", encoding="utf-8")
         self._writer = csv.DictWriter(self._file, CSV_FIELDS)
@@ -52,6 +54,15 @@ class Recorder:
             microsecond=0
         )
         self._last = now
+
+    def new_lap(self) -> int:
+        """Start the next lap and return its number.
+
+        Laps are numbered from 1 and stamped on the rows as they are written, so
+        the first row with the new number is the one that follows the lap press.
+        """
+        self.lap += 1
+        return self.lap
 
     def elapsed(self, now: float) -> float:
         """Seconds since recording started, on the monotonic clock."""
@@ -84,6 +95,7 @@ class Recorder:
                     "cadence": sensor.cadence,
                     "right_balance": sensor.right_balance,
                     "speed": None if sensor.speed is None else round(sensor.speed, 2),
+                    "lap": self.lap,
                 }
             )
             self.rows += 1

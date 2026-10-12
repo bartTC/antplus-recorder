@@ -6,6 +6,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ### Added
 
+- `space` starts a new lap. The CSV has a `lap` column with the lap number, so the first row with a new number is the one after the key press. The raw log records the press too, so a replay gives the same laps. It also restarts the difference to the reference, like `c`, which still does that alone.
 - On macOS the Mac no longer goes to sleep while the app runs, which stopped the recording. No need to run `caffeinate` alongside any more.
 
 ### Changed

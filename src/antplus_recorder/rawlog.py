@@ -11,6 +11,7 @@ replayed with a newer decoder. One tab-separated line per entry:
   where the stick supports them a signal block and its own receive timestamp
 - `event`: something the stick reported, e.g. a serial queue overflow
 - `note`: a note typed in during the ride, e.g. "Stages zeroed"
+- `lap`: the lap key was pressed; the field is the number of the lap that starts
 
 The seconds count up from the monotonic clock for exact intervals; the unix
 time lines the ride up with files from other devices, e.g. a head unit's FIT.
@@ -89,6 +90,10 @@ class RawLog:
                 # A sync flush keeps everything up to here readable after a crash
                 self._file.flush()
                 self._flushed = now
+
+    def lap(self, number: int, now: float) -> None:
+        """Record that lap `number` started, so a replay puts it on the same row."""
+        self._write("lap", now, str(number))
 
     def close(self) -> None:
         """Finish the gzip stream; entries written after this are dropped."""
@@ -197,6 +202,8 @@ def replay(
             meta[entry.fields[0]] = entry.fields[1]
         elif entry.kind == "note":
             result.notes.append((entry.unix_time, entry.fields[0]))
+        elif entry.kind == "lap":
+            result.recorder.new_lap()
         elif entry.kind == "event":
             result.events.append((entry.seconds, entry.fields[0]))
     record(second)
