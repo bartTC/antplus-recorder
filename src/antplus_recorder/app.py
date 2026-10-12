@@ -418,21 +418,27 @@ class RecorderApp(App):
             self.registry.set_reference(sensor)
         self.refresh_display()
 
+    def toast(self, message: str, timeout: float) -> None:
+        """Notify, then repaint once it's gone: the terminal can keep the parts of
+        the toast that overlapped widgets updating underneath it."""
+        self.notify(message, timeout=timeout)
+        self.set_timer(timeout + 0.5, lambda: self.refresh(repaint=True, layout=True))
+
     def action_note(self) -> None:
         if self.raw_log is None:
-            self.notify("Not recording, there's no raw log for notes", timeout=3)
+            self.toast("Not recording, there's no raw log for notes", 3)
             return
 
         def save(text: str | None) -> None:
             if text and self.raw_log:
                 self.raw_log.note(text, time.monotonic())
-                self.notify(f"Note saved: {text}", timeout=3)
+                self.toast(f"Note saved: {text}", 3)
 
         self.push_screen(NoteScreen(), save)
 
     def action_reset_laps(self) -> None:
         self.laps.clear()
-        self.notify("Δ lap reset", timeout=2)
+        self.toast("Δ lap reset", 2)
 
     def _reference(self) -> Sensor | None:
         reference = self.registry.reference()
@@ -512,7 +518,7 @@ class RecorderApp(App):
                 if len(self.found) <= 2
                 else f"{len(self.found)} devices"
             )
-            self.notify(f"Found {found}", timeout=3)
+            self.toast(f"Found {found}", 3)
             self.found = []
 
         hint = self.query_one("#hint", Label)

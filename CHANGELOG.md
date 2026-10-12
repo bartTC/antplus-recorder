@@ -10,6 +10,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 - The table of other devices is gone. Passers-by (foot pods, bike lights …) only cluttered the screen; they are still counted in the title bar and recorded. The "Found" notice now only announces devices that get a tile.
 - `devices.toml` only lists devices that sent a reading, so passers-by no longer pile up in it.
 
+### Fixed
+
+- Parts of a notification could stay on screen after it expired, until the next scroll. The screen is now repainted when a notification goes away.
+
 ## [0.4.0] - 2026-10-10
 
 ### Added
