@@ -1,6 +1,6 @@
 [project]
 name = "antplus-recorder"
-version = "0.4.0"
+version = "0.5.0"
 description = "Record and display every ANT+ sensor in range: power meters, smart trainers and heart rate straps"
 readme = "README.md"
 license = "MIT"

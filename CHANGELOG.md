@@ -4,6 +4,8 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-12
+
 ### Added
 
 - `space` starts a new lap. The CSV has a `lap` column with the lap number, so the first row with a new number is the one after the key press. The raw log records the press too, so a replay gives the same laps. It also restarts the difference to the reference, like `c`, which still does that alone.
@@ -75,7 +77,8 @@ First release.
 - libusb comes bundled through `libusb-package`, so no Homebrew is needed on a Mac.
 - A stick that hangs after a crash is detected within half a second and reset.
 
-[Unreleased]: https://github.com/bartTC/antplus-recorder/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/bartTC/antplus-recorder/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/bartTC/antplus-recorder/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/bartTC/antplus-recorder/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/bartTC/antplus-recorder/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/bartTC/antplus-recorder/compare/v0.1.0...v0.2.0
