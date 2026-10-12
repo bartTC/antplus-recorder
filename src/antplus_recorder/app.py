@@ -490,7 +490,7 @@ class RecorderApp(App):
         """
         self.laps.clear()
         if self.recorder is None:
-            self.toast("Δ lap reset", 2)
+            self.toast("Reset Δ lap", 2)
             return
         number = self.recorder.new_lap()
         if self.raw_log:
@@ -500,7 +500,7 @@ class RecorderApp(App):
     def action_reset_laps(self) -> None:
         """Start the lap difference against the reference over, e.g. after a zero offset."""
         self.laps.clear()
-        self.toast("Δ lap reset", 2)
+        self.toast("Reset Δ lap", 2)
 
     def _reference(self) -> Sensor | None:
         """The reference meter, or None if none is set or it hasn't been heard yet."""
