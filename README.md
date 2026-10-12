@@ -40,7 +40,7 @@ antplus-recorder --fit-from 2026-10-09_18-57-53.csv
 antplus-recorder --replay 2026-10-09_18-57-53.ant.gz
 ```
 
-Recording starts right away, so it can't be forgotten. Files go to the folder you start the command in, named after the start time, and are never overwritten.
+Recording starts right away, so it can't be forgotten. On macOS the Mac stays awake while the app runs (it holds the same power assertion `caffeinate` does); the display can still turn off. Files go to the folder you start the command in, named after the start time, and are never overwritten.
 
 | Option | Default | Effect |
 |---|---|---|

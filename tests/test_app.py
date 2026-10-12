@@ -40,4 +40,3 @@ def test_sensors_that_send_come_first_then_heart_rate_power_trainer():
         ("trainer", 3),
         ("heart_rate", 1),
     ]
-

@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- On macOS the Mac no longer goes to sleep while the app runs, which stopped the recording. No need to run `caffeinate` alongside any more.
+
 ### Changed
 
 - Tiles of sensors that are sending come first, in the order heart rate, power, trainer. A passing heart rate strap or trainer no longer pushes your own power meter down, and one that goes quiet sinks to the end.

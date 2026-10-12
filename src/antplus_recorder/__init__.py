@@ -12,6 +12,7 @@ from textual.logging import TextualHandler
 
 from . import rawlog, reception
 from .app import RecorderApp
+from .awake import stay_awake
 from .rawlog import RawLog
 from .receiver import Receiver
 from .recording import Recorder, write_fit_files
@@ -94,7 +95,8 @@ def main() -> None:
 
     app = RecorderApp(receiver, Registry(args.devices), recorder, raw_log)
     try:
-        app.run()
+        with stay_awake():
+            app.run()
     finally:
         receiver.stop()
         if recorder and raw_log:
