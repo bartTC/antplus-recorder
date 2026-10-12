@@ -54,10 +54,18 @@ class Recorder:
         self._last = now
 
     def elapsed(self, now: float) -> float:
+        """Seconds since recording started, on the monotonic clock."""
         return now - self._started
 
     def write(self, sensors: list[tuple[Sensor, str | None]], now: float) -> None:
-        """Record each sensor's mean value since the previous call."""
+        """Record each sensor's mean value since the previous call, as one row each.
+
+        Meant to be called once a second. Only power, trainer and heart rate
+        sensors get rows (RECORDED_KINDS), and only those with something to
+        report for the interval, so a sensor that joins mid-ride starts
+        appearing when it first sends. Every call flushes, so a crash loses at
+        most the last second.
+        """
         stamp = self._started_wall + timedelta(seconds=round(now - self._started))
         for sensor, name in sensors:
             if sensor.kind not in RECORDED_KINDS:
@@ -83,6 +91,7 @@ class Recorder:
         self._file.flush()
 
     def close(self) -> None:
+        """Close the CSV; every write is flushed already, so a crash loses at most a second."""
         self._file.close()
 
 
@@ -117,10 +126,18 @@ def write_fit_files(csv_path: Path) -> tuple[list[Path], list[Path]]:
 
 
 def _optional_int(value: str) -> int | None:
+    """An int from a CSV cell, or None for an empty one."""
     return int(value) if value else None
 
 
 def _encode_activity(rows: list[dict], heart_rate: dict[datetime, int]) -> bytes:
+    """Encode the rows of one power source as a complete FIT activity file.
+
+    Rows are one second apart, so distance is summed from speed row by row.
+    The file is a single lap and session with averages computed here, since
+    FIT consumers expect the summary messages. Heart rate comes from a
+    separate strap and is matched by timestamp.
+    """
     start, end = rows[0]["time"], rows[-1]["time"]
     elapsed = (end - start).total_seconds() + 1
     encoder = Encoder()

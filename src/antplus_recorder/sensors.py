@@ -1,4 +1,14 @@
-"""Live state of ANT+ sensors, decoded from their broadcast data pages."""
+"""Live state of ANT+ sensors, decoded from their broadcast data pages.
+
+A sensor broadcasts 8-byte data pages at a fixed rate. Each `Sensor` keeps what
+the pages said so far (current value, cadence, battery, a history of readings
+for averages), and `Sensor.update` decodes one page into it. Only power meters,
+smart trainers and heart rate straps are decoded; every other device type is
+tracked by identity and last-seen time alone.
+
+The stick's thread calls `update` while the dashboard reads, so readers must
+snapshot the sample deques before iterating.
+"""
 
 from collections import deque
 from dataclasses import dataclass, field
@@ -43,6 +53,16 @@ TARGET_POWER_STATUS = {1: "ERG: speed too low", 2: "ERG: speed too high"}
 
 @dataclass
 class Sensor:
+    """One ANT+ device heard in scan mode, identified by device type and number.
+
+    Fields are filled in as the matching data pages arrive, so most of them stay
+    None until the sensor has sent them: manufacturer, model and serial arrive
+    on pages that come round only every minute or two, and what a sensor sends
+    depends on its profile. `value` is watts for power meters and trainers and
+    bpm for heart rate straps; `samples` keeps every reading with its arrival
+    time for averaging.
+    """
+
     device_type: int
     number: int
     manufacturer_id: int | None = None
@@ -73,14 +93,21 @@ class Sensor:
 
     @property
     def kind(self) -> str:
+        """The name of the device type, e.g. `power`, or `type_<n>` if it isn't one we know."""
         return KINDS.get(self.device_type, f"type_{self.device_type}")
 
     @property
     def unit(self) -> str:
+        """Unit of `value`, empty for kinds that don't report one."""
         return UNITS.get(self.kind, "")
 
     @property
     def manufacturer(self) -> str | None:
+        """The manufacturer's name as decoded from the FIT profile, or None if unknown.
+
+        Sensors send this on a page of its own, so it is missing until that page
+        has come round. An id outside the profile reads as `Manufacturer <id>`.
+        """
         if self.manufacturer_id is None:
             return None
         name = MANUFACTURERS.get(self.manufacturer_id)
@@ -90,10 +117,20 @@ class Sensor:
 
     @property
     def has_data(self) -> bool:
-        """Whether it ever sent a reading, not just a page that announced it."""
+        """Whether it ever sent a reading, not just a page that announced it.
+
+        Passers-by are heard before they say anything useful, and a device type
+        that isn't decoded never has a reading, so this is what separates
+        sensors worth remembering from noise.
+        """
         return bool(self.samples)
 
     def is_fresh(self, now: float) -> bool:
+        """Whether a page arrived within STALE_AFTER seconds of `now`.
+
+        Sensors sleep when nothing moves, so a stale sensor is normal (the user
+        stopped pedalling) and not an error; the dashboard dims it instead.
+        """
         return now - self.last_seen < STALE_AFTER
 
     # The stick's thread appends to the sample deques while the dashboard reads
@@ -101,6 +138,10 @@ class Sensor:
     # copies it in one step under the GIL, so every reader snapshots first.
 
     def mean(self, since: float, until: float) -> float | None:
+        """Mean of the readings that arrived after `since`, up to and including `until`.
+
+        Returns None if there are none.
+        """
         values = [v for t, v in list(self.samples) if since < t <= until]
         return sum(values) / len(values) if values else None
 
@@ -131,11 +172,23 @@ class Sensor:
         return sum(right * power for right, power in recent) / total
 
     def rate(self, now: float, seconds: float = 4.0) -> float:
-        """Value updates per second, a rough signal quality indicator."""
+        """Readings per second over the last `seconds`, a rough signal quality indicator.
+
+        A power meter normally sends 4 a second; a lower rate while the sensor is
+        in range points to dropped messages. Held values (see `_hold_or_coast`)
+        count as readings too, so this measures messages, not new measurements.
+        """
         return sum(1 for t, _ in list(self.samples) if now - t <= seconds) / seconds
 
     def update(self, page: bytes, now: float) -> None:
-        """Decode one 8-byte ANT+ data page."""
+        """Decode one 8-byte ANT+ data page received at monotonic time `now`.
+
+        Every page counts as a sign of life, whatever it carries. The common
+        pages (manufacturer, serial, battery) have the same layout in every
+        profile except heart rate, which carries its own in a rotating page
+        number; everything else is handled per profile. Pages of other device
+        types or with unknown numbers are ignored.
+        """
         self.last_seen = now
         number = page[0]
 
@@ -157,12 +210,23 @@ class Sensor:
             self._trainer(page, now)
 
     def _set_value(self, value: int, now: float) -> None:
+        """Make `value` the current reading and add it to the history.
+
+        The balance sample is kept alongside only if one is known, so the power
+        weighted left/right average sees the same readings as the power average.
+        """
         self.value = value
         self.samples.append((now, value))
         if self.right_balance is not None:
             self.balance_samples.append((now, self.right_balance, value))
 
     def _heart_rate(self, page: bytes, now: float) -> None:
+        """Decode a heart rate page.
+
+        Every page carries the current bpm in its last byte; the first four bytes
+        depend on the page number and rotate through manufacturer, model, battery
+        and so on. A 0 means the strap has no reading yet and is skipped.
+        """
         # Bit 7 toggles every 4 messages; bytes 4-7 are the same on every page
         number = page[0] & 0x7F
         if number == 2:
@@ -176,6 +240,11 @@ class Sensor:
             self._set_value(page[7], now)
 
     def _power(self, page: bytes, now: float) -> None:
+        """Decode a standard power page (0x10), with optional pedal balance and cadence.
+
+        A page whose event counter hasn't moved repeats the previous measurement,
+        so it only extends the current value (or starts coasting).
+        """
         power = self._event_power(
             page[1], page[4] | page[5] << 8, page[6] | page[7] << 8, now
         )
@@ -210,8 +279,13 @@ class Sensor:
         return round((accumulated - last[1]) % 65536 / events)
 
     def _hold_or_coast(self, now: float) -> None:
-        # While the cranks stand still, meters keep repeating their last
-        # message, power included
+        """Handle a page without a new measurement: keep the value, or show 0 W.
+
+        While the cranks stand still, meters keep repeating their last message,
+        power included. Head units show 0 W once the event counter has been
+        still for COAST_TIMEOUT, and so do we; until then the last value is
+        held so a brief gap doesn't dip the average.
+        """
         if self._event is not None and now - self._event[2] >= COAST_TIMEOUT:
             self.cadence = 0
             self.right_balance = None
@@ -220,6 +294,13 @@ class Sensor:
             self._set_value(self.value, now)
 
     def _trainer(self, page: bytes, now: float) -> None:
+        """Decode a fitness equipment (FE-C) page from a smart trainer.
+
+        Trainers spread their state over several pages: speed (0x10), resistance
+        and incline (0x11) and power with calibration and target status (0x19);
+        each fills in only its own fields. The "spindown needed" status bit is
+        deliberately not reported, see TRAINER_STATUS.
+        """
         number = page[0]
         if number in FE_PAGES_WITH_STATE:
             self.fe_state = FE_STATES.get(page[7] >> 4 & 0x07)

@@ -71,7 +71,7 @@ Recording starts right away, so it can't be forgotten. On macOS the Mac stays aw
 - Smart trainers (FE-C): state (ready, in use, paused), resistance level, incline if sent, and warnings such as `zero offset needed` or `ERG: speed too low`.
 - A trend line of the last two minutes, starting at 0 W.
 
-Heart rate straps get a tile with bpm. Every other ANT+ device in range (watches, footpods, radars …) isn't shown, but is still counted in the title bar and recorded.
+Heart rate straps get a tile with bpm. Every other ANT+ device in range (watches, footpods, radars …) isn't shown. It is counted in the title bar and kept in the raw log.
 
 ## Comparing power meters
 

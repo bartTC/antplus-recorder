@@ -20,6 +20,14 @@ from .registry import Registry
 
 
 def main() -> None:
+    """Entry point: run the dashboard, or one of the offline modes.
+
+    `--fit-from` and `--replay` work on files of an earlier ride and exit.
+    Otherwise recording starts immediately, so it can't be forgotten, unless
+    `--no-record` is given. When the dashboard ends, the files are closed and
+    the FIT files are built from the CSV; a ride with no rows leaves no files
+    behind. If the stick couldn't be used the process exits with the reason.
+    """
     parser = argparse.ArgumentParser(prog="antplus-recorder", description=__doc__)
     parser.add_argument(
         "-o",
@@ -117,6 +125,13 @@ def main() -> None:
 
 
 def replay(log: Path, registry: Registry) -> None:
+    """Recompute a ride from its raw log and report on it.
+
+    Prints what the log says about the ride (start, app, stick, notes), the
+    reception per channel and stick events, then writes the replay CSV, the
+    reception CSV and the FIT files. Exits with a message if the log is invalid
+    or the output already exists, as nothing is ever overwritten.
+    """
     try:
         result = rawlog.replay(log, registry.label)
     except FileExistsError as e:
@@ -168,6 +183,7 @@ def print_reception(channels: list[reception.Channel]) -> None:
 
 
 def write_fits(csv_path: Path) -> None:
+    """Build the FIT files for a ride's CSV and print which were written or skipped."""
     written, skipped = write_fit_files(csv_path)
     for path in written:
         print(f"Wrote {path}")

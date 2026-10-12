@@ -76,6 +76,8 @@ def interval(seconds: float, ticks_before: int | None, ticks: int | None) -> flo
 
 @dataclass
 class Minute:
+    """Messages received and missed in one minute of a ride, for one channel."""
+
     received: int = 0
     missed: int = 0
 
@@ -87,6 +89,13 @@ class Minute:
 
 @dataclass
 class Channel:
+    """Reception of one device's channel: how often it should send, how often it
+    did, and where the gaps were.
+
+    The period is the profile's where known; otherwise it is estimated from the
+    usual interval, which assumes loss is the exception.
+    """
+
     device_type: int
     number: int
     period: float  # seconds
@@ -116,7 +125,13 @@ class Channel:
 def analyse(
     channels: dict[tuple[int, int], list[tuple[float, int | None]]],
 ) -> list[Channel]:
-    """Loss per channel and minute from each message's (seconds, stick timestamp)."""
+    """Loss per channel and minute from each message's (seconds, stick timestamp).
+
+    For each pair of consecutive messages, the number of periods that fit into
+    the gap, minus one, is the number of missed messages. Gaps over BREAK
+    seconds are breaks and aren't counted as loss. Channels that never had two
+    messages close together have no period to speak of and are left out.
+    """
     result = []
     for (device_type, number), messages in sorted(channels.items()):
         intervals = [

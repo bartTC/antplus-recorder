@@ -1,4 +1,13 @@
-"""Terminal dashboard showing every ANT+ sensor in range."""
+"""Terminal dashboard showing the ANT+ sensors that are sending.
+
+Power meters, smart trainers and heart rate straps each get a tile with the
+current value, rolling averages and a trend line. Other devices are only
+counted in the title bar; the raw log has them.
+
+The receiver decodes on the stick's thread and the app polls its sensors from
+the UI thread: four times a second for the screen, once a second for the CSV
+row, the trend lines and the laps against the reference meter.
+"""
 
 import errno
 import sys
@@ -65,6 +74,7 @@ class NoteScreen(ModalScreen[str | None]):
         yield Input(placeholder="Note, e.g. Stages zeroed  (Enter saves, Esc cancels)")
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Close with the typed note, or None if the field was empty."""
         self.dismiss(event.value.strip() or None)
 
 
@@ -103,8 +113,12 @@ class SensorTile(Vertical):
             self.sensor = sensor
 
     def order(self, now: float) -> tuple[bool, int, int]:
-        """Sort key: sensors that send now come first, so passers-by with a
-        heart rate strap or a stray trainer don't push yours down."""
+        """Sort key that puts sensors sending now first, then by kind and number.
+
+        Without this a passing heart rate strap or a stray trainer would take
+        a place in front of your own power meter. A sensor that goes quiet
+        sinks to the end, where it is already dimmed.
+        """
         return (
             not self.sensor.is_fresh(now),
             TILE_KINDS.index(self.sensor.kind),
@@ -112,6 +126,7 @@ class SensorTile(Vertical):
         )
 
     def on_click(self) -> None:
+        """Offer this tile as the reference meter, if it is one that can be compared."""
         if self.sensor.kind in AVERAGED_KINDS:
             self.post_message(self.Selected(self.sensor))
 
@@ -132,6 +147,12 @@ class SensorTile(Vertical):
         yield Sparkline(self.history)
 
     def show(self, label: str | None, now: float, window: int) -> None:
+        """Update the tile from its sensor's state at monotonic time `now`.
+
+        `window` is the seconds averaged for the big power number, 0 for the
+        live value. A sensor that has gone quiet dims and shows `--` instead of
+        its last value, with how long it has been silent in the details.
+        """
         s = self.sensor
         fresh = s.is_fresh(now)
         self.set_class(not fresh, "stale")
@@ -244,6 +265,14 @@ class SensorTile(Vertical):
 
 
 class RecorderApp(App):
+    """The dashboard: a grid of tiles over the receiver's sensors.
+
+    Owns the receiver's worker thread and ties together the registry (names
+    and the reference meter), the CSV recorder and the raw log. Failures to
+    use the stick end the app with `error` set, which `main` prints after the
+    terminal is restored.
+    """
+
     TITLE = "antplus-recorder"
     BINDINGS = [
         ("q", "quit", "Quit"),
@@ -311,6 +340,7 @@ class RecorderApp(App):
         recorder: Recorder | None,
         raw_log: RawLog | None = None,
     ) -> None:
+        """`recorder` and `raw_log` are None when not recording."""
         super().__init__()
         self.receiver = receiver
         self.registry = registry
@@ -351,12 +381,18 @@ class RecorderApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
+        """Start the listening thread and the timers for the display and the recording."""
         self.run_worker(self._listen, thread=True, name="ant")
         self.set_interval(0.25, self.refresh_display)
         self.set_interval(1.0, self.tick)
 
     def _listen(self) -> None:
-        """Open the stick and process its data until the app exits (worker thread)."""
+        """Open the stick and process its data until the app exits (worker thread).
+
+        Each way opening can fail ends the app with a message saying what to
+        do about it; the cases are told apart by the exception type, as openant
+        and pyusb report them differently.
+        """
         self.receiver.on_lost = lambda: self.call_from_thread(
             self._fail, "The ANT+ USB stick was disconnected. Recording stopped."
         )
@@ -390,6 +426,7 @@ class RecorderApp(App):
         self.call_from_thread(self._fail, error)
 
     def _set_status(self, text: str) -> None:
+        """Show the receiver's progress; called on the UI thread through `call_from_thread`."""
         self.status = text
         self.refresh_display()
 
@@ -397,10 +434,12 @@ class RecorderApp(App):
         self.listening_since = time.monotonic()
 
     def _fail(self, message: str) -> None:
+        """End the app with exit code 1; `main` prints `message` after the terminal is restored."""
         self.error = message
         self.exit(return_code=1)
 
     def action_window(self, seconds: int) -> None:
+        """Average the big power numbers over `seconds` (0 for live), from the buttons and keys."""
         self.window = seconds
 
     def watch_window(self, seconds: int) -> None:
@@ -411,6 +450,7 @@ class RecorderApp(App):
         self.refresh_display()
 
     def on_sensor_tile_selected(self, message: SensorTile.Selected) -> None:
+        """Make the clicked power tile the reference meter, or clear it if it already is."""
         sensor = message.sensor
         if self.registry.reference() == (sensor.kind, sensor.number):
             self.registry.set_reference(None)
@@ -425,6 +465,10 @@ class RecorderApp(App):
         self.set_timer(timeout + 0.5, lambda: self.refresh(repaint=True, layout=True))
 
     def action_note(self) -> None:
+        """Ask for a note and write it into the raw log at this moment of the ride.
+
+        There is nothing to write to without recording, which is said instead.
+        """
         if self.raw_log is None:
             self.toast("Not recording, there's no raw log for notes", 3)
             return
@@ -437,10 +481,12 @@ class RecorderApp(App):
         self.push_screen(NoteScreen(), save)
 
     def action_reset_laps(self) -> None:
+        """Start the lap difference against the reference over, e.g. after a zero offset."""
         self.laps.clear()
         self.toast("Δ lap reset", 2)
 
     def _reference(self) -> Sensor | None:
+        """The reference meter, or None if none is set or it hasn't been heard yet."""
         reference = self.registry.reference()
         if reference is None:
             return None
@@ -458,6 +504,11 @@ class RecorderApp(App):
         self._fit_columns()
 
     def _fit_columns(self) -> None:
+        """Set the tile grid's column count to what fits the window, at most one per tile.
+
+        Each tile needs TILE_MIN_WIDTH, so the count is recomputed when the window
+        is resized or a tile is added.
+        """
         fit = (self.size.width - TILES_PADDING + TILE_GUTTER) // (
             TILE_MIN_WIDTH + TILE_GUTTER
         )
@@ -467,6 +518,13 @@ class RecorderApp(App):
             grid.styles.grid_size_columns = columns
 
     def refresh_display(self) -> None:
+        """Bring the screen up to date with the receiver; runs four times a second.
+
+        Creates tiles for sensors heard for the first time and announces them in a
+        notification once discovery settles, updates the existing tiles, keeps the
+        active ones in front and sets the hint and title. Devices without a tile
+        are skipped.
+        """
         now = time.monotonic()
         sensors = list(self.receiver.sensors.items())
 
@@ -536,6 +594,11 @@ class RecorderApp(App):
         self.sub_title = f"{self.status} · {len(sensors)} devices"
 
     def tick(self) -> None:
+        """Once-a-second work: trend lines, device list, laps and the CSV row.
+
+        Sensors enter `devices.toml` only once they have sent a reading. Without a
+        recorder this only shows "not recording" and skips the row.
+        """
         now = time.monotonic()
         for tile in self.tiles.values():
             if tile.is_mounted:
@@ -577,12 +640,18 @@ class RecorderApp(App):
                 self.laps.setdefault(key, Lap()).add(power, reference_power)
 
     def _add_tile(self, key: tuple[int, int], sensor: Sensor) -> None:
+        """Mount a tile for a newly heard sensor; the next refresh moves it into place."""
         tile = self.tiles[key] = SensorTile(sensor)
         # Appended; the next refresh puts it in its place
         self.query_one("#tiles", Grid).mount(tile)
         self._fit_columns()
 
     def _sort_tiles(self, now: float) -> None:
+        """Reorder the tiles by `SensorTile.order`, moving only those out of place.
+
+        Called every refresh, so it moves only the tiles that are out of place and
+        leaves an already sorted grid alone.
+        """
         grid = self.query_one("#tiles", Grid)
         shown = list(grid.query_children(SensorTile))
         wanted = sorted(shown, key=lambda t: t.order(now))

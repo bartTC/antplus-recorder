@@ -36,6 +36,14 @@ HEADER = "# antplus-recorder raw ANT+ log, format 1"
 
 
 class RawLog:
+    """Writes the raw log of a ride as gzipped text, one entry per line.
+
+    Messages arrive on the receiver's thread and notes on the main one, so
+    every write takes a lock. The file is flushed at most once a second to keep
+    the cost low while bounding the loss in a crash: gzip data up to the last
+    flush stays readable, see `read`.
+    """
+
     def __init__(self, path: Path, now: float, started: datetime) -> None:
         self.path = path
         self.messages = 0
@@ -49,19 +57,28 @@ class RawLog:
         self.meta("started", started.isoformat(), now)
 
     def meta(self, key: str, value: str, now: float) -> None:
+        """Record a detail about the ride, such as the app version or the stick in use."""
         self._write("meta", now, f"{key}\t{value}")
 
     def message(self, data: Sequence[int], now: float) -> None:
+        """Record a received message exactly as the stick delivered it."""
         self.messages += 1
         self._write("msg", now, bytes(data).hex(" "))
 
     def event(self, text: str, now: float) -> None:
+        """Record something the stick reported besides data, e.g. a serial queue overflow."""
         self._write("event", now, text)
 
     def note(self, text: str, now: float) -> None:
+        """Record a note typed in during the ride, collapsed onto one line."""
         self._write("note", now, " ".join(text.split()))
 
     def _write(self, kind: str, now: float, fields: str) -> None:
+        """Append one line, stamped with both clocks.
+
+        Silently does nothing once the log is closed, as the receiver's thread can
+        still deliver a message while the app shuts down.
+        """
         with self._lock:
             if self._file.closed:
                 return
@@ -74,12 +91,15 @@ class RawLog:
                 self._flushed = now
 
     def close(self) -> None:
+        """Finish the gzip stream; entries written after this are dropped."""
         with self._lock:
             self._file.close()
 
 
 @dataclass
 class Entry:
+    """One line of a raw log: type, seconds into the ride, unix time and the other fields."""
+
     kind: str
     seconds: float
     unix_time: float
@@ -87,7 +107,14 @@ class Entry:
 
 
 def read(path: Path) -> Iterator[Entry]:
-    """Entries of a raw log, as far as it got before a crash."""
+    """Entries of a raw log, as far as it got before a crash.
+
+    A log that ended without a clean close is cut off at an arbitrary point:
+    the gzip stream has no end marker, and the last line may be half written.
+    Both end the iteration instead of raising, so everything recorded up to
+    the last flush can still be replayed. Raises ValueError if the file isn't a
+    raw log at all.
+    """
     with gzip.open(path, "rt", encoding="utf-8") as file:
         if file.readline().strip() != HEADER:
             msg = f"{path} is not an antplus-recorder raw log"
@@ -125,7 +152,14 @@ def replay(
     """Rebuild a ride's CSV from its raw log, next to it as `<ride>_replay.csv`.
 
     The messages go through the receiver and the recorder writes once per
-    second of the ride, as during the live ride.
+    second of the ride, as during the live ride. Since the log holds the bytes
+    undecoded, replaying with a newer version applies its decoder to an old
+    ride; that is the point of keeping the raw log.
+
+    `label` names a sensor for the CSV, as the registry does live. Besides the
+    CSV, the result carries what the reception analysis needs. Raises
+    ValueError if the log has no start time, and FileExistsError if the replay
+    CSV already exists.
     """
     entries = read(path)
     meta: dict[str, str] = {}

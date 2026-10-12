@@ -1,4 +1,13 @@
-"""Listen to every ANT+ sensor in range, without pairing."""
+"""Listen to every ANT+ sensor in range, without pairing.
+
+The stick runs in continuous scan mode: one wildcard channel receives every
+broadcast on the ANT+ frequency, together with the sender's channel ID, so the
+receiver can tell sensors apart without opening a channel per device. That
+needs a stick with an nRF24AP2 chip or newer, which `Receiver.open` checks.
+
+openant runs the stick in its own thread. Everything here that it calls back
+(`_on_data`, `on_lost`) therefore runs off the UI thread.
+"""
 
 import contextlib
 import errno
@@ -37,7 +46,7 @@ DATA_EVENTS = {
 
 
 class StickNotResponding(AntException):
-    pass
+    """The stick didn't answer on any attempt to open it, resets included."""
 
 
 class StickUnsupported(AntException):
@@ -45,7 +54,12 @@ class StickUnsupported(AntException):
 
 
 class Log(Protocol):
-    """Where the receiver reports what it gets, e.g. the raw log."""
+    """Where the receiver reports what it gets; the raw log is the implementation.
+
+    `now` is monotonic seconds. `message` is passed every received message
+    unchanged, `meta` details about the stick, `event` things the stick reports
+    that explain gaps in the data.
+    """
 
     def message(self, data: Sequence[int], now: float) -> None: ...
     def meta(self, key: str, value: str, now: float) -> None: ...
@@ -134,6 +148,11 @@ class Receiver:
 
     @property
     def stick_info(self) -> str:
+        """The stick in one line for the raw log: serial, firmware, USB id, extended data.
+
+        Tells a later reader of the log which extra fields each message carries,
+        see EXTENDED_DATA.
+        """
         node = self.node
         product = getattr(node.ant._driver, "ID_PRODUCT", None)  # noqa: SLF001
         usb = f"USB 0fcf:{product:04x}, " if product else ""
@@ -142,6 +161,11 @@ class Receiver:
         return f"serial {node.serial}, {version}, {usb}extended data {self.extended_data:#04x} ({extended})"
 
     def _responds(self) -> bool:
+        """Whether the stick answers within RESPONSE_TIMEOUT.
+
+        `Node()` asks for the serial number while starting up, so a stick that
+        hasn't reported it by then is stuck.
+        """
         # Node() requests the stick's serial number while starting up
         deadline = time.monotonic() + RESPONSE_TIMEOUT
         while self.node.serial is None:
@@ -186,6 +210,15 @@ class Receiver:
         driver.read = watched_read
 
     def _open_scan_channel(self) -> None:
+        """Set up the wildcard channel and start scanning on the ANT+ frequency.
+
+        The channel ID 0/0/0 is a wildcard that matches every device type and
+        number. The stick is asked to append the channel ID, signal and receive
+        timestamp to each message, falling back to fewer fields if it refuses (see
+        EXTENDED_DATA). Stick events other than data are forwarded to the log
+        before openant handles them, since they explain gaps the sensors didn't
+        cause.
+        """
         self.node.set_network_key(0x00, ANTPLUS_NETWORK_KEY)
         channel = self.node.new_channel(Channel.Type.BIDIRECTIONAL_RECEIVE)
         channel.on_broadcast_data = self._on_data
@@ -219,11 +252,20 @@ class Receiver:
         self.node.ant.channel_event_function = on_event
 
     def run(self) -> None:
-        """Process incoming data until stop() is called."""
+        """Process incoming data until stop() is called.
+
+        Blocks: call it from the worker thread, after a successful `open`.
+        """
         if self.node and not self._stopping:
             self.node.start()
 
     def stop(self) -> None:
+        """Stop the stick and make `run` return; safe to call more than once.
+
+        The stick is reset first so it stops streaming scan data: one left in
+        scan mode ignores the next session's first open. Calling it before `open`
+        has finished makes `open` give up and return False.
+        """
         if self._stopping:
             return
         self._stopping = True
@@ -236,19 +278,32 @@ class Receiver:
         self._close_node()
 
     def _close_node(self) -> None:
-        # Closing raises after the stick is gone, and on Linux also when there
-        # was no kernel driver to give the stick back to; the node's threads
-        # have been told to stop either way
+        """Shut down openant's node, ignoring the USB errors closing can raise.
+
+        Closing raises after the stick is gone, and on Linux also when there
+        was no kernel driver to give the stick back to; the node's threads
+        have been told to stop either way.
+        """
         with contextlib.suppress(USBError):
             self.node.stop()
 
     def _on_data(self, data: Sequence[int]) -> None:
+        """Callback for broadcast data, on the stick's thread; stamps it with the current time."""
         self.handle(data, time.monotonic())
 
     def handle(self, data: Sequence[int], now: float) -> None:
-        """Decode one message from the stick, live or replayed from a raw log."""
-        # Extended data after the 8-byte page: flag byte, then the channel ID
-        # of the sender (device number, device type, transmission type)
+        """Decode one message from the stick, live or replayed from a raw log.
+
+        A message is the 8-byte page, a flag byte and the sender's channel ID:
+        device number (16 bits), device type and transmission type. The upper
+        four bits of the transmission type extend the number to 20 bits, and
+        bit 7 of the device type is the pairing bit, which says nothing about
+        what the device is. Messages without a channel ID can't be attributed
+        and are dropped, as are other devices' when `only` is set.
+
+        `now` is the arrival time on the monotonic clock; a replay passes the
+        logged one, which makes it reproduce a ride exactly.
+        """
         if len(data) < 13:
             return
         number = data[9] | data[10] << 8 | (data[12] & 0xF0) << 12
