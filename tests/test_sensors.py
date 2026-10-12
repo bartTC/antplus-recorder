@@ -88,14 +88,15 @@ def test_trainer_pages():
     sensor = Sensor(17, 1)
     sensor.update(bytes([0x10, 0x19, 0, 0, 0x28, 0x23, 0xFF, 0x34]), 0.0)  # 9 m/s
     sensor.update(bytes([0x11, 0xFF, 0xFF, 0xCF, 0xFF, 0x7F, 70, 0x30]), 0.0)
-    sensor.update(trainer_page(1, 200, 200, cadence=88, status=0x2, target=1), 0.0)
+    sensor.update(trainer_page(1, 200, 200, cadence=88, status=0x6, target=1), 0.0)
     assert sensor.speed == pytest.approx(32.4)
     assert sensor.resistance == 35
     assert sensor.incline is None
     assert sensor.fe_state == "in use"
     assert sensor.value == 200
     assert sensor.cadence == 88
-    assert sensor.trainer_status == ("spindown needed",)
+    # The spindown bit is set too, but trainers send it regardless
+    assert sensor.trainer_status == ("user config needed",)
     assert sensor.target_power_status == "ERG: speed too low"
 
 

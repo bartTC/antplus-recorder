@@ -31,9 +31,10 @@ EVENT_GAP = 10.0
 # FE-C (fitness equipment control), as broadcast by smart trainers
 FE_STATES = {1: "off", 2: "ready", 3: "in use", 4: "paused"}
 FE_PAGES_WITH_STATE = (0x10, 0x11, 0x19, 0x1A)
-TRAINER_STATUS = {  # page 0x19, byte 6 bits 4-6
+# Page 0x19, byte 6 bits 4-6. Bit 1 (spindown needed) is left out: a Kickr
+# sends it on every message, even right after a spindown
+TRAINER_STATUS = {
     0x1: "zero offset needed",
-    0x2: "spindown needed",
     0x4: "user config needed",
 }
 # Only reported while an app such as Zwift holds the trainer at a target power

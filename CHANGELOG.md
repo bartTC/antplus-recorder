@@ -12,6 +12,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ### Fixed
 
+- A Kickr always said `spindown needed`, even after a spindown: it sends that flag on every message. The warning is no longer shown.
 - Parts of a notification could stay on screen after it expired, until the next scroll. The screen is now repainted when a notification goes away.
 
 ## [0.4.0] - 2026-10-10

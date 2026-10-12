@@ -68,7 +68,7 @@ Recording starts right away, so it can't be forgotten. Files go to the folder yo
 - 3 s, 10 s and 30 s averages, always.
 - The difference to the reference meter, see below.
 - L/R balance for dual-sided meters, power-weighted over the selected window, battery and how often a new power value arrives (Hz).
-- Smart trainers (FE-C): state (ready, in use, paused), resistance level, incline if sent, and warnings such as `spindown needed` or `ERG: speed too low`.
+- Smart trainers (FE-C): state (ready, in use, paused), resistance level, incline if sent, and warnings such as `zero offset needed` or `ERG: speed too low`.
 - A trend line of the last two minutes, starting at 0 W.
 
 Heart rate straps get a tile with bpm. Every other ANT+ device in range (watches, footpods, radars …) isn't shown, but is still counted in the title bar and recorded.
