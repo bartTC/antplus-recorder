@@ -16,7 +16,6 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import (
     Button,
-    DataTable,
     Digits,
     Footer,
     Header,
@@ -34,7 +33,7 @@ from .registry import Registry
 from .sensors import Sensor
 
 NOTHING_FOUND_AFTER = 15.0  # seconds before the empty screen turns into a warning
-TILE_KINDS = ("power", "trainer", "heart_rate")  # big tiles, in this order
+TILE_KINDS = ("heart_rate", "power", "trainer")  # big tiles, in this order
 # Fits "1234 W  100 rpm" and the averages line; as many columns as fit at this width
 TILE_MIN_WIDTH = 36
 TILE_GUTTER = 2
@@ -103,9 +102,14 @@ class SensorTile(Vertical):
             super().__init__()
             self.sensor = sensor
 
-    @property
-    def order(self) -> tuple[int, int]:
-        return TILE_KINDS.index(self.sensor.kind), self.sensor.number
+    def order(self, now: float) -> tuple[bool, int, int]:
+        """Sort key: sensors that send now come first, so passers-by with a
+        heart rate strap or a stray trainer don't push yours down."""
+        return (
+            not self.sensor.is_fresh(now),
+            TILE_KINDS.index(self.sensor.kind),
+            self.sensor.number,
+        )
 
     def on_click(self) -> None:
         if self.sensor.kind in AVERAGED_KINDS:
@@ -298,7 +302,6 @@ class RecorderApp(App):
     SensorTile.power .value { color: $warning; }
     SensorTile.trainer .value { color: $accent; }
     SensorTile.heart_rate .value { color: $error; }
-    #others { height: auto; max-height: 8; margin: 1 2; }
     """
 
     def __init__(
@@ -345,19 +348,9 @@ class RecorderApp(App):
             yield Label(id="rec")
         yield Label(id="hint")
         yield Grid(id="tiles")
-        others = DataTable(id="others", cursor_type="none", zebra_stripes=True)
-        # Focus would scroll the screen down to the table on startup; it has
-        # no cursor, and the mouse wheel scrolls it without focus
-        others.can_focus = False
-        yield others
         yield Footer()
 
     def on_mount(self) -> None:
-        table = self.query_one("#others", DataTable)
-        for column in ("kind", "number", "manufacturer", "name", "last seen"):
-            table.add_column(column, key=column)
-        table.display = False
-
         self.run_worker(self._listen, thread=True, name="ant")
         self.set_interval(0.25, self.refresh_display)
         self.set_interval(1.0, self.tick)
@@ -469,7 +462,6 @@ class RecorderApp(App):
 
     def refresh_display(self) -> None:
         now = time.monotonic()
-        table = self.query_one("#others", DataTable)
         sensors = list(self.receiver.sensors.items())
 
         # A new reference, picked here or in devices.toml, starts the laps over
@@ -485,6 +477,9 @@ class RecorderApp(App):
         )
 
         for key, sensor in sensors:
+            # Everything else, e.g. a runner's foot pod passing by, is only recorded
+            if sensor.kind not in TILE_KINDS:
+                continue
             if key not in self.seen:
                 self.seen.add(key)
                 label = self.registry.label(sensor)
@@ -494,36 +489,22 @@ class RecorderApp(App):
                     else f"{sensor.kind} #{sensor.number}"
                 )
                 self.last_found = now
-            if sensor.kind in TILE_KINDS:
-                if key not in self.tiles:
-                    # Shown from the next refresh on, once its widgets exist
-                    self._add_tile(key, sensor)
-                else:
-                    tile = self.tiles[key]
-                    tile.show(self.registry.label(sensor), now, self.window)
-                    tile.show_comparison(
-                        reference,
-                        reference_label,
-                        self.laps.get(key),
-                        now,
-                        self.window,
-                        comparable,
-                    )
+            if key not in self.tiles:
+                # Shown from the next refresh on, once its widgets exist
+                self._add_tile(key, sensor)
             else:
-                row = f"{key[0]}:{key[1]}"
-                cells = {
-                    "kind": sensor.kind,
-                    "number": str(sensor.number),
-                    "manufacturer": self.registry.manufacturer(sensor) or "",
-                    "name": self.registry.name(sensor) or "",
-                    "last seen": f"{now - sensor.last_seen:.0f}s ago",
-                }
-                if row not in table.rows:
-                    table.add_row(*cells.values(), key=row)
-                    table.display = True
-                else:
-                    for column, value in cells.items():
-                        table.update_cell(row, column, value)
+                tile = self.tiles[key]
+                tile.show(self.registry.label(sensor), now, self.window)
+                tile.show_comparison(
+                    reference,
+                    reference_label,
+                    self.laps.get(key),
+                    now,
+                    self.window,
+                    comparable,
+                )
+
+        self._sort_tiles(now)
 
         if self.found and now - self.last_found > 1.0:
             found = (
@@ -556,7 +537,9 @@ class RecorderApp(App):
         self.registry.reload()
         sensors = list(self.receiver.sensors.values())
         for sensor in sensors:
-            self.registry.record(sensor)
+            # Passers-by that never sent a reading don't belong in devices.toml
+            if sensor.has_data:
+                self.registry.record(sensor)
         self._add_to_laps(now)
         self.last_tick = now
 
@@ -589,7 +572,16 @@ class RecorderApp(App):
 
     def _add_tile(self, key: tuple[int, int], sensor: Sensor) -> None:
         tile = self.tiles[key] = SensorTile(sensor)
-        grid = self.query_one("#tiles", Grid)
-        later = [t for t in grid.query_children(SensorTile) if t.order > tile.order]
-        grid.mount(tile, before=min(later, key=lambda t: t.order) if later else None)
+        # Appended; the next refresh puts it in its place
+        self.query_one("#tiles", Grid).mount(tile)
         self._fit_columns()
+
+    def _sort_tiles(self, now: float) -> None:
+        grid = self.query_one("#tiles", Grid)
+        shown = list(grid.query_children(SensorTile))
+        wanted = sorted(shown, key=lambda t: t.order(now))
+        for index, tile in enumerate(wanted):
+            if shown[index] is not tile:
+                grid.move_child(tile, before=shown[index])
+                shown.remove(tile)
+                shown.insert(index, tile)

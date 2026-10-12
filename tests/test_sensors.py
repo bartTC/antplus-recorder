@@ -132,3 +132,11 @@ def test_averages_survive_pages_arriving_on_another_thread():
     finally:
         stop.set()
         thread.join()
+
+
+def test_a_sensor_has_data_once_it_sent_a_reading():
+    sensor = Sensor(120, 1)
+    sensor.update(bytes([0x02, 1, 0, 0, 0, 0, 0, 0]), 1.0)  # manufacturer page only
+    assert not sensor.has_data
+    sensor.update(heart_rate_page(60), 2.0)
+    assert sensor.has_data

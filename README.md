@@ -71,7 +71,7 @@ Recording starts right away, so it can't be forgotten. Files go to the folder yo
 - Smart trainers (FE-C): state (ready, in use, paused), resistance level, incline if sent, and warnings such as `spindown needed` or `ERG: speed too low`.
 - A trend line of the last two minutes, starting at 0 W.
 
-Heart rate straps get a tile with bpm. Every other ANT+ device in range (watches, footpods, radars …) is listed in a table below.
+Heart rate straps get a tile with bpm. Every other ANT+ device in range (watches, footpods, radars …) isn't shown, but is still counted in the title bar and recorded.
 
 ## Comparing power meters
 
@@ -162,7 +162,7 @@ A gap in the reception explains a wrong value; a wrong value without a gap point
 
 ### Naming devices
 
-`devices.toml` in the current folder lists every device ever seen, filled in automatically:
+`devices.toml` in the current folder lists every device that has sent a reading, filled in automatically (devices that were only heard in passing aren't added):
 
 ```toml
 [power.57587]

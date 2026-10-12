@@ -9,7 +9,7 @@ from tomlkit.items import Table
 from .sensors import Sensor
 
 HEADER = (
-    "Every ANT+ device antplus-recorder has seen, by kind and device number.\n"
+    "Every ANT+ device that sent a reading to antplus-recorder, by kind and device number.\n"
     "Set `name` to label a device on screen. The other fields are filled in automatically."
 )
 

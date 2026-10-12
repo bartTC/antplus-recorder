@@ -87,6 +87,11 @@ class Sensor:
             return f"Manufacturer {self.manufacturer_id}"
         return " ".join(word[:1].upper() + word[1:] for word in name.split("_"))
 
+    @property
+    def has_data(self) -> bool:
+        """Whether it ever sent a reading, not just a page that announced it."""
+        return bool(self.samples)
+
     def is_fresh(self, now: float) -> bool:
         return now - self.last_seen < STALE_AFTER
 

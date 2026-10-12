@@ -4,6 +4,12 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Changed
+
+- Tiles of sensors that are sending come first, in the order heart rate, power, trainer. A passing heart rate strap or trainer no longer pushes your own power meter down, and one that goes quiet sinks to the end.
+- The table of other devices is gone. Passers-by (foot pods, bike lights …) only cluttered the screen; they are still counted in the title bar and recorded. The "Found" notice now only announces devices that get a tile.
+- `devices.toml` only lists devices that sent a reading, so passers-by no longer pile up in it.
+
 ## [0.4.0] - 2026-10-10
 
 ### Added
