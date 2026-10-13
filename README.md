@@ -10,23 +10,34 @@ There is no pairing. The ANT+ USB stick listens to the whole ANT+ frequency, and
 
 ## Install
 
-Python ≥ 3.11 and an ANT+ USB stick (ANT USB2 or ANT USB-m, the usual Garmin/Dynastream ones).
+You need an ANT+ USB stick (ANT USB2 or ANT USB-m, the usual Garmin/Dynastream ones). Python is not needed up front, [uv](https://docs.astral.sh/uv/) fetches the right one by itself, and libusb comes along as a dependency.
 
-```sh
-uvx antplus-recorder            # run without installing
-uv tool install antplus-recorder
-pipx install antplus-recorder
+### On a Mac, step by step
+
+1. Plug in the ANT+ stick and allow the accessory to connect when macOS asks.
+2. Open the Terminal app: press `⌘ Space`, type `Terminal` and press Enter.
+3. Paste this line and press Enter. It installs uv and only has to be done once:
+
+   ```sh
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+4. Close the Terminal window, open a new one, paste this and press Enter:
+
+   ```sh
+   uvx antplus-recorder@latest
+   ```
+
+From then on, step 4 is all it takes. The `@latest` makes it check for a new version every time and update itself. Recordings are saved in the folder the Terminal is in, which is your home folder unless you changed it. See [Usage](#usage) for saving them somewhere else.
+
+### Linux
+
+The stick needs read/write access for your user. Untested, but this udev rule in `/etc/udev/rules.d/42-ant-usb-sticks.rules` should do it, followed by `sudo udevadm control --reload-rules` and replugging the stick:
+
 ```
-
-libusb comes along with the `libusb-package` dependency, so a Mac needs nothing from Homebrew. If libusb is installed on the system, that one is used.
-
-- **macOS:** Plug the stick in and allow the accessory to connect when macOS asks.
-- **Linux:** The stick needs read/write access for your user. Untested, but this udev rule in `/etc/udev/rules.d/42-ant-usb-sticks.rules` should do it, followed by `sudo udevadm control --reload-rules` and replugging the stick:
-
-  ```
-  SUBSYSTEM=="usb", ATTRS{idVendor}=="0fcf", ATTRS{idProduct}=="1008", MODE="0666"
-  SUBSYSTEM=="usb", ATTRS{idVendor}=="0fcf", ATTRS{idProduct}=="1009", MODE="0666"
-  ```
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0fcf", ATTRS{idProduct}=="1008", MODE="0666"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0fcf", ATTRS{idProduct}=="1009", MODE="0666"
+```
 
 ## Usage
 
