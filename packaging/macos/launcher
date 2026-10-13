@@ -1,0 +1,6 @@
+#!/bin/bash
+# The app's executable. The recorder is a terminal interface, so this hands
+# run.command to Terminal. `open` needs no Automation permission, unlike
+# telling Terminal what to do with AppleScript.
+resources="$(cd "$(dirname "$0")/../Resources" && pwd)"
+exec open -a Terminal "$resources/run.command"

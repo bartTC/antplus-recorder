@@ -25,3 +25,7 @@ lint:
 # Build sdist and wheel into dist/
 build:
     rm -rf dist && uv build
+
+# Build, sign and notarize the macOS app into dist/macos (Apple Silicon)
+app:
+    packaging/macos/build.sh
