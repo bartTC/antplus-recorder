@@ -52,6 +52,10 @@ testpaths = ["tests"]
 requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
+# The changelog sits at the repository root; the menu reads it from the package
+[tool.hatch.build.targets.wheel.force-include]
+"CHANGELOG.md" = "antplus_recorder/CHANGELOG.md"
+
 [tool.hatch.build.targets.sdist]
 include = ["src", "README.md", "CHANGELOG.md", "LICENSE"]
 

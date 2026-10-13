@@ -73,6 +73,7 @@ Recording starts right away, so it can't be forgotten. On macOS the Mac stays aw
 | `c` | Start a new lap for the comparison only, the CSV keeps its lap number. |
 | `n` | Write a note into the raw log at this moment, e.g. "Stages zeroed". |
 | `q` | Quit. Writes the FIT files. |
+| `ctrl+p` or the icon at the top left | The menu. Its Changelog entry shows what changed in each version. |
 
 ### What a tile shows
 

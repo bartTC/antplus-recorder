@@ -13,16 +13,17 @@ import errno
 import sys
 import time
 from collections import deque
+from collections.abc import Iterable
 from typing import ClassVar
 
 from openant.base.driver import DriverNotFound
 from openant.easy.exception import AntException
-from textual.app import App, ComposeResult
+from textual.app import App, ComposeResult, SystemCommand
 from textual.binding import Binding
-from textual.containers import Grid, Horizontal, Vertical
+from textual.containers import Grid, Horizontal, Vertical, VerticalScroll
 from textual.message import Message
 from textual.reactive import reactive
-from textual.screen import ModalScreen
+from textual.screen import ModalScreen, Screen
 from textual.widgets import (
     Button,
     Digits,
@@ -30,10 +31,12 @@ from textual.widgets import (
     Header,
     Input,
     Label,
+    Markdown,
     Sparkline,
 )
 from usb.core import NoBackendError, USBError
 
+from . import changelog
 from .comparison import MIN_REFERENCE_POWER, Lap, difference
 from .rawlog import RawLog
 from .receiver import Receiver, StickUnsupported
@@ -76,6 +79,28 @@ class NoteScreen(ModalScreen[str | None]):
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Close with the typed note, or None if the field was empty."""
         self.dismiss(event.value.strip() or None)
+
+
+class ChangelogScreen(ModalScreen[None]):
+    """The changelog, rendered, over the dashboard."""
+
+    BINDINGS: ClassVar = [("escape", "dismiss", "Close")]
+    DEFAULT_CSS = """
+    ChangelogScreen { align: center middle; }
+    ChangelogScreen VerticalScroll {
+        width: 90%;
+        max-width: 100;
+        height: 90%;
+        border: round $accent;
+        padding: 0 2;
+    }
+    ChangelogScreen Label { width: 90%; max-width: 100; color: $text-muted; }
+    """
+
+    def compose(self) -> ComposeResult:
+        with VerticalScroll():
+            yield Markdown(changelog.read())
+        yield Label("Esc closes", id="close-hint")
 
 
 def open_error(e: USBError) -> str:
@@ -464,6 +489,17 @@ class RecorderApp(App):
         the toast that overlapped widgets updating underneath it."""
         self.notify(message, timeout=timeout)
         self.set_timer(timeout + 0.5, lambda: self.refresh(repaint=True, layout=True))
+
+    def get_system_commands(self, screen: Screen) -> Iterable[SystemCommand]:
+        """The menu behind the icon at the top left: the defaults and the changelog."""
+        yield from super().get_system_commands(screen)
+        yield SystemCommand(
+            "Changelog", "What changed in each version", self.action_changelog
+        )
+
+    def action_changelog(self) -> None:
+        """Show the changelog."""
+        self.push_screen(ChangelogScreen())
 
     def action_note(self) -> None:
         """Ask for a note and write it into the raw log and the CSV.

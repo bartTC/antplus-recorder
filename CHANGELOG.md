@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- The menu at the top left (or `ctrl+p`) has a Changelog entry that shows what changed in each version. The wheel carries a copy of `CHANGELOG.md` for it.
+
 ### Changed
 
 - Notes from `n` get a row of their own in the CSV (kind `note`, text in a new `note` column). Raw log and CSV time them at the key press, not at the Enter that saves them. A replay writes the same rows.

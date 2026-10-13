@@ -1,8 +1,14 @@
+import asyncio
 import errno
+import os
+from pathlib import Path
 
 from usb.core import USBError
 
-from antplus_recorder.app import SensorTile, open_error
+from antplus_recorder import changelog
+from antplus_recorder.app import ChangelogScreen, RecorderApp, SensorTile, open_error
+from antplus_recorder.receiver import Receiver
+from antplus_recorder.registry import Registry
 from antplus_recorder.sensors import Sensor
 
 
@@ -40,3 +46,29 @@ def test_sensors_that_send_come_first_then_heart_rate_power_trainer():
         ("trainer", 3),
         ("heart_rate", 1),
     ]
+
+
+def test_changelog_is_readable_and_current():
+    text = changelog.read()
+    assert text.startswith("# Changelog")
+    assert "## [Unreleased]" in text
+
+
+def test_menu_offers_the_changelog_and_it_opens():
+    class NoStick(RecorderApp):
+        def _listen(self) -> None:
+            pass
+
+    async def run():
+        app = NoStick(Receiver(), Registry(Path(os.devnull)), None)
+        async with app.run_test() as pilot:
+            titles = [c.title for c in app.get_system_commands(app.screen)]
+            assert "Changelog" in titles
+            app.action_changelog()
+            await pilot.pause()
+            assert isinstance(app.screen, ChangelogScreen)
+            await pilot.press("escape")
+            await pilot.pause()
+            assert not isinstance(app.screen, ChangelogScreen)
+
+    asyncio.run(run())
