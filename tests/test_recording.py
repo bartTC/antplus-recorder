@@ -1,4 +1,5 @@
 import csv
+from datetime import datetime
 
 import pytest
 from garmin_fit_sdk import Decoder, Stream
@@ -104,3 +105,19 @@ def test_csv_numbers_the_laps_from_the_row_after_the_key_press(tmp_path):
     recorder.close()
     laps = [row["lap"] for row in csv.DictReader(recorder.path.open())]
     assert laps == ["1", "1", "1", "2", "2", "2"]
+
+
+def test_csv_gets_a_row_for_a_note_at_the_time_of_the_key_press(tmp_path):
+    sensor = Sensor(11, 1)
+    recorder = Recorder(
+        tmp_path / "ride.csv", 0.0, datetime(2026, 10, 9, 19, 0, 0).astimezone()
+    )
+    sensor.update(power_page(1, 200, 200), 0.5)
+    recorder.write([(sensor, None)], 1.0)
+    recorder.note("Stages   zeroed", 2.2)
+    recorder.close()
+    rows = list(csv.DictReader(recorder.path.open()))
+    assert [row["kind"] for row in rows] == ["power", "note"]
+    assert rows[1]["note"] == "Stages zeroed"
+    assert rows[1]["time"].startswith("2026-10-09T19:00:02")
+    assert rows[1]["value"] == ""

@@ -466,17 +466,22 @@ class RecorderApp(App):
         self.set_timer(timeout + 0.5, lambda: self.refresh(repaint=True, layout=True))
 
     def action_note(self) -> None:
-        """Ask for a note and write it into the raw log at this moment of the ride.
+        """Ask for a note and write it into the raw log and the CSV.
 
-        There is nothing to write to without recording, which is said instead.
+        The note belongs to the moment of the key press, not of the Enter that
+        saves it. There is nothing to write to without recording, which is said
+        instead.
         """
         if self.raw_log is None:
             self.toast("Not recording, there's no raw log for notes", 3)
             return
 
+        pressed, pressed_unix = time.monotonic(), time.time()
+
         def save(text: str | None) -> None:
-            if text and self.raw_log:
-                self.raw_log.note(text, time.monotonic())
+            if text and self.raw_log and self.recorder:
+                self.raw_log.note(text, pressed, pressed_unix)
+                self.recorder.note(text, pressed)
                 self.toast(f"Note saved: {text}", 3)
 
         self.push_screen(NoteScreen(), save)

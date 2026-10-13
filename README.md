@@ -103,7 +103,7 @@ For a clean number, warm up for 10 minutes, then do the trainer's spindown and t
 | Column | Content |
 |---|---|
 | `time` | Local time with UTC offset, ISO 8601. |
-| `kind` | `power`, `trainer` or `heart_rate`. |
+| `kind` | `power`, `trainer` or `heart_rate`, or `note` for a note row. |
 | `number` | ANT+ device number. |
 | `name` | Name from `devices.toml`, else the manufacturer. |
 | `value` | Watts or bpm, the mean of that second. |
@@ -112,6 +112,7 @@ For a clean number, warm up for 10 minutes, then do the trainer's spindown and t
 | `right_balance` | Right leg's share in %, dual-sided meters only. |
 | `speed` | km/h, smart trainers only. |
 | `lap` | Lap number, from 1. `space` starts the next one, so the first row with a new number is the one after the key press. |
+| `note` | Only on rows of `kind` `note`: a note from `n`, timed at the key press, not at the Enter that saves it. The other columns are empty. |
 
 A device that joins mid-ride (pedals woken up later) simply starts appearing in the rows. With pandas: `df.pivot_table(index="time", columns=["kind", "number"], values="value")`.
 
@@ -136,7 +137,7 @@ note   8.1091  1791567854.214  Kickr spindown done
 - `meta`: start time, app version, command line, stick, notes from `--note`.
 - `msg`: the 8-byte page, the flag byte and the channel ID (device number, type, transmission type). Where the stick supports it, also a signal block and the stick's own receive timestamp in 1/32768 s, the most exact clock there is. The timestamp wraps every 2 s.
 - `event`: anything the stick reports besides data, such as a serial queue overflow, which explains a gap no sensor caused.
-- `note`: a note typed in with `n` during the ride.
+- `note`: a note typed in with `n` during the ride, timed at the key press. The CSV gets a row for it too.
 - `lap`: `space` was pressed, with the number of the lap that starts. A replay puts it on the same row of the CSV.
 
 The signal block is not a signal strength on the usual sticks. ANT defines two layouts: measurement type `0x20` is RSSI in dBm (3 bytes: type, RSSI, threshold), type `0x10` is a reading of the radio's automatic gain control (4 bytes: type, threshold offset, 16-bit register). The ANT USB2 and USB-m sticks are built on the nRF24AP2, which can't measure RSSI and sends the AGC block, e.g. `10 01 6d 00`. By the reports below, its register stays the same at every distance until the messages stop, so it says nothing about reception. It stays in the log unchanged, and a stick with a newer chip that sends `0x20` gets real dBm values recorded. Sources: [antgo #24](https://github.com/half2me/antgo/pull/24), [Nordic DevZone](https://devzone.nordicsemi.com/f/nordic-q-a/4633/how-decode-rssi-message), [ANT parameters](https://www.thisisant.com/APIassets/0.5.0_ANTnRFConnectDoc/doc/api/parameters.html).

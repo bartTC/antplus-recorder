@@ -70,12 +70,18 @@ class RawLog:
         """Record something the stick reported besides data, e.g. a serial queue overflow."""
         self._write("event", now, text)
 
-    def note(self, text: str, now: float) -> None:
-        """Record a note typed in during the ride, collapsed onto one line."""
-        self._write("note", now, " ".join(text.split()))
+    def note(self, text: str, now: float, unix_time: float | None = None) -> None:
+        """Record a note typed in during the ride, collapsed onto one line.
 
-    def _write(self, kind: str, now: float, fields: str) -> None:
-        """Append one line, stamped with both clocks.
+        `now` and `unix_time` are the moment the key was pressed, which is
+        earlier than the entry is written, as typing takes a while.
+        """
+        self._write("note", now, " ".join(text.split()), unix_time)
+
+    def _write(
+        self, kind: str, now: float, fields: str, unix_time: float | None = None
+    ) -> None:
+        """Append one line, stamped with both clocks (the wall clock now by default).
 
         Silently does nothing once the log is closed, as the receiver's thread can
         still deliver a message while the app shuts down.
@@ -84,7 +90,7 @@ class RawLog:
             if self._file.closed:
                 return
             self._file.write(
-                f"{kind}\t{now - self._started:.4f}\t{time.time():.3f}\t{fields}\n"
+                f"{kind}\t{now - self._started:.4f}\t{unix_time or time.time():.3f}\t{fields}\n"
             )
             if now - self._flushed >= 1:
                 # A sync flush keeps everything up to here readable after a crash
@@ -202,6 +208,7 @@ def replay(
             meta[entry.fields[0]] = entry.fields[1]
         elif entry.kind == "note":
             result.notes.append((entry.unix_time, entry.fields[0]))
+            result.recorder.note(entry.fields[0], entry.seconds)
         elif entry.kind == "lap":
             result.recorder.new_lap()
         elif entry.kind == "event":

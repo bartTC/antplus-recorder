@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Changed
+
+- Notes from `n` get a row of their own in the CSV (kind `note`, text in a new `note` column). Raw log and CSV time them at the key press, not at the Enter that saves them. A replay writes the same rows.
+
 ## [0.5.0] - 2026-10-12
 
 ### Added

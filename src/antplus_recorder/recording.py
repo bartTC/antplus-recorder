@@ -29,6 +29,7 @@ CSV_FIELDS = [
     "right_balance",
     "speed",
     "lap",
+    "note",
 ]
 
 MESG_NUM = Profile["mesg_num"]
@@ -63,6 +64,19 @@ class Recorder:
         """
         self.lap += 1
         return self.lap
+
+    def note(self, text: str, now: float) -> None:
+        """Write a row with a note at the second `now`, the moment its key was pressed.
+
+        The row has no sensor, only the time, the kind `note` and the text, so it
+        sits in the CSV among the rows of its second. It is written at once, so
+        after a slow note it comes after rows of later seconds.
+        """
+        stamp = self._started_wall + timedelta(seconds=round(now - self._started))
+        self._writer.writerow(
+            {"time": stamp.isoformat(), "kind": "note", "note": " ".join(text.split())}
+        )
+        self._file.flush()
 
     def elapsed(self, now: float) -> float:
         """Seconds since recording started, on the monotonic clock."""
