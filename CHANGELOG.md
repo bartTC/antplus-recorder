@@ -4,6 +4,8 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-13
+
 ### Added
 
 - The menu at the top left (or `ctrl+p`) has a Changelog entry that shows what changed in each version. The wheel carries a copy of `CHANGELOG.md` for it.
@@ -85,7 +87,8 @@ First release.
 - libusb comes bundled through `libusb-package`, so no Homebrew is needed on a Mac.
 - A stick that hangs after a crash is detected within half a second and reset.
 
-[Unreleased]: https://github.com/bartTC/antplus-recorder/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/bartTC/antplus-recorder/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/bartTC/antplus-recorder/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/bartTC/antplus-recorder/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/bartTC/antplus-recorder/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/bartTC/antplus-recorder/compare/v0.2.0...v0.3.0
